@@ -151,6 +151,23 @@ class TeamController {
 			});
 		}
 	};
+
+	// 设置成员权限
+	setMemberIdentity = async (req: Request, res: Response) => {
+		const { team_id, user_id, team_user_identity } = req.body;
+		try {
+			await queryPromise(`UPDATE team_members SET team_user_identity = ${team_user_identity} WHERE team_id = ${team_id} AND user_id = ${user_id}`);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'set member identity success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
 }
 
 export const teamController = new TeamController();

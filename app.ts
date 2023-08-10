@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-app.use('/home', teamsRouter);
+app.use('/teams', teamsRouter);
 app.use('/users', usersRouter);
 
 // catch 404 and forward to error handler
