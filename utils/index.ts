@@ -1,6 +1,5 @@
 import db from '../database/index';
-import { promisify } from 'util';
-import { QueryOptions, queryCallback } from 'mysql';
+import { QueryOptions } from 'mysql';
 
 export const getMissingParam = (requireParams: string[], paramsFromClient: object) => {
 	const paramsFromClientKeys = Object.keys(paramsFromClient);

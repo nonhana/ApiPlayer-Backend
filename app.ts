@@ -4,10 +4,10 @@ import path from 'path';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
 
-import indexRouter from './routes/index';
+import teamsRouter from './routes/teams';
 import usersRouter from './routes/users';
 
-var app = express();
+const app = express();
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -19,7 +19,7 @@ app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-app.use('/', indexRouter);
+app.use('/home', teamsRouter);
 app.use('/users', usersRouter);
 
 // catch 404 and forward to error handler

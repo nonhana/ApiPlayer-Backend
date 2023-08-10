@@ -11,6 +11,7 @@ interface registerRequestBody {
 }
 
 class UserController {
+	// 用于存储邮箱验证码的 Map
 	emailCaptchaMap: Map<string, string>;
 
 	constructor() {
@@ -18,6 +19,7 @@ class UserController {
 		this.sendCaptcha = this.sendCaptcha.bind(this);
 	}
 
+	// 发送验证码
 	sendCaptcha = async (req: Request, res: Response) => {
 		const { email } = req.body;
 		console.log({ email });
@@ -69,6 +71,7 @@ class UserController {
 		);
 	};
 
+	// 注册
 	register = async (req: Request<{}, {}, registerRequestBody>, res: Response) => {
 		const missingParam = getMissingParam(['email', 'captcha', 'password'], req.body);
 
@@ -110,6 +113,7 @@ class UserController {
 		}
 	};
 
+	// 登陆
 	login = async (req: Request, res: Response) => {
 		const missingParam = getMissingParam(['email', 'password'], req.body);
 
@@ -153,6 +157,7 @@ class UserController {
 		}
 	};
 
+	// 获取用户信息
 	info = async (req: Request, res: Response) => {
 		try {
 			const retrieveRes = await queryPromise('SELECT * FROM users WHERE id = ?', (req as any).state.userInfo.id);
@@ -165,6 +170,7 @@ class UserController {
 		}
 	};
 
+	// 更新用户信息
 	updateInfo = async (req: Request, res: Response) => {
 		const alterParams = ['username', 'password', 'introduce'];
 
@@ -187,6 +193,7 @@ class UserController {
 		}
 	};
 
+	// 上传头像
 	uploadAvatar = async (req: Request, res: Response) => {
 		if (!req.file) {
 			res.status(400).json({ message: 'No file uploaded' });
@@ -204,6 +211,33 @@ class UserController {
 				avatar: avatarPath,
 			},
 		});
+	};
+
+	// 根据用户名搜索用户
+	searchUser = async (req: Request, res: Response) => {
+		const missingParam = getMissingParam(['username'], req.query);
+
+		if (missingParam) {
+			res.status(400).json({ message: `${missingParam} 缺失` });
+			return;
+		}
+
+		const { username } = req.query;
+
+		try {
+			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: '获取成功',
+				user_list: retrieveRes,
+			});
+		} catch (error) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: '获取失败' + error,
+			});
+		}
 	};
 }
 

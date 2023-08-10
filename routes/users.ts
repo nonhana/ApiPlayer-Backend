@@ -14,6 +14,7 @@ const storage = multer.diskStorage({
 		cb(null, `${Date.now()}_${Math.floor(Math.random() * 1e9)}${path.extname(file.originalname)}`);
 	},
 });
+
 const upload = multer({
 	storage,
 });
@@ -35,5 +36,8 @@ router.post('/update-info', auth, userController.updateInfo);
 
 // 上传头像
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
+
+// 根据用户名搜索用户
+router.get('/search', auth, userController.searchUser);
 
 export default router;

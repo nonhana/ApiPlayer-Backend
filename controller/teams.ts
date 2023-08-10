@@ -1,0 +1,156 @@
+import { Request, Response } from 'express';
+import { getMissingParam, queryPromise } from '../utils/index';
+
+class TeamController {
+	// 获取该用户的团队列表
+	getTeamList = async (req: Request, res: Response) => {
+		const { user_id } = req.query;
+		try {
+			const teamIdList = await queryPromise(`SELECT team_id FROM team_members WHERE user_id = ${user_id}`);
+			const source = await queryPromise(`SELECT * FROM teams WHERE team_id IN (${teamIdList})`);
+			const result = source.map((item: any) => {
+				return {
+					team_id: item.team_id,
+					team_name: item.team_name,
+				};
+			});
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'get team list success',
+				data: result,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message,
+			});
+			return;
+		}
+	};
+
+	// 获取某单个团队的详细信息
+	getTeamInfo = async (req: Request, res: Response) => {
+		const { team_id, user_id } = req.query;
+		try {
+			const [memberList, projectList, teamInfoSource, userTeamName] = await Promise.all([
+				queryPromise(`SELECT user_id, username, avator FROM users WHERE user_id IN (SELECT user_id FROM team_members WHERE team_id = ${team_id})`),
+				queryPromise(`SELECT project_id, project_name, project_img FROM projects WHERE team_id = ${team_id}`),
+				queryPromise(`SELECT team_id, team_name, team_desc FROM teams WHERE team_id = ${team_id}`),
+				queryPromise(`SELECT team_user_name FROM team_members WHERE team_id = ${team_id} AND user_id = ${user_id}`),
+			]);
+
+			const memberListFormatted = memberList.map((item: any) => ({
+				user_id: item.user_id,
+				user_name: item.username,
+				user_avatar: item.avator,
+			}));
+
+			const teamInfo = {
+				team_id: teamInfoSource[0].team_id,
+				team_name: teamInfoSource[0].team_name,
+				team_desc: teamInfoSource[0].team_desc,
+				team_user_name: userTeamName[0].team_user_name,
+			};
+
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'get team info success',
+				member_list: memberListFormatted,
+				project_list: projectList,
+				team_info: teamInfo,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 新建团队
+	addTeam = async (req: Request, res: Response) => {
+		const missingParam = getMissingParam(req.body, ['user_id', 'team_name', 'team_desc', 'team_user_name']);
+
+		if (missingParam) {
+			res.status(400).json({
+				result_code: 1,
+				result_message: `Missing param ${missingParam}`,
+			});
+			return;
+		}
+
+		const { user_id, team_name, team_desc, team_user_name } = req.body;
+
+		try {
+			const teamId = await queryPromise(`INSERT INTO teams (team_name, team_desc) VALUES ('${team_name}', '${team_desc}')`);
+			// 创建团队的时候，创建人是团队所有者
+			await queryPromise(
+				`INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (${user_id}, ${teamId}, '${team_user_name}', 3)`
+			);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'add team success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 删除团队
+	deleteTeam = async (req: Request, res: Response) => {
+		const { team_id } = req.body;
+		try {
+			await queryPromise(`DELETE FROM teams WHERE team_id = ${team_id}`);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'delete team success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 更新团队信息
+	updateTeamInfo = async (req: Request, res: Response) => {
+		const { team_id, user_id, team_name, team_desc, team_user_name } = req.body;
+		try {
+			await queryPromise(`UPDATE teams SET team_name = '${team_name}', team_desc = '${team_desc}', team_user_name = '${team_user_name}' 
+			WHERE team_id = ${team_id} AND user_id = ${user_id}`);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'update team info success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 邀请用户加入团队
+	inviteUser = async (req: Request, res: Response) => {
+		const { team_id, user_id, team_user_name } = req.body;
+		try {
+			// 默认身份：0-游客，1-成员，2-管理员，3-所有者
+			await queryPromise(`INSERT INTO team_members (user_id, team_id, team_user_name) VALUES (${user_id}, ${team_id}, '${team_user_name}')`);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'invite user success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+}
+
+export const teamController = new TeamController();
