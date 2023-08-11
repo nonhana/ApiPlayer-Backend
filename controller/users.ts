@@ -89,8 +89,11 @@ class UserController {
 				res.status(200).json({ message: '该 email 已存在' });
 				return;
 			}
-		} catch (error) {
-			res.status(500).json({ message: '注册失败' });
+		} catch (error: any) {
+			res.status(500).json({
+				message: '注册失败',
+				error: error.message,
+			});
 			return;
 		}
 
@@ -215,15 +218,7 @@ class UserController {
 
 	// 根据用户名搜索用户
 	searchUser = async (req: Request, res: Response) => {
-		const missingParam = getMissingParam(['username'], req.query);
-
-		if (missingParam) {
-			res.status(400).json({ message: `${missingParam} 缺失` });
-			return;
-		}
-
 		const { username } = req.query;
-
 		try {
 			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
 

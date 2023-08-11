@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
-import { getMissingParam, queryPromise } from '../utils/index';
+import { queryPromise } from '../utils/index';
+import type { OkPacket } from 'mysql';
 
 class TeamController {
 	// 获取该用户的团队列表
@@ -69,23 +70,12 @@ class TeamController {
 
 	// 新建团队
 	addTeam = async (req: Request, res: Response) => {
-		const missingParam = getMissingParam(req.body, ['user_id', 'team_name', 'team_desc', 'team_user_name']);
-
-		if (missingParam) {
-			res.status(400).json({
-				result_code: 1,
-				result_message: `Missing param ${missingParam}`,
-			});
-			return;
-		}
-
 		const { user_id, team_name, team_desc, team_user_name } = req.body;
-
 		try {
-			const teamId = await queryPromise(`INSERT INTO teams (team_name, team_desc) VALUES ('${team_name}', '${team_desc}')`);
+			const teamId: OkPacket = await queryPromise(`INSERT INTO teams (team_name, team_desc) VALUES ('${team_name}', '${team_desc}')`);
 			// 创建团队的时候，创建人是团队所有者
 			await queryPromise(
-				`INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (${user_id}, ${teamId}, '${team_user_name}', 3)`
+				`INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (${user_id}, ${teamId.insertId}, '${team_user_name}', 3)`
 			);
 			res.status(200).json({
 				result_code: 0,
@@ -117,7 +107,7 @@ class TeamController {
 	};
 
 	// 更新团队信息
-	updateTeamInfo = async (req: Request, res: Response) => {
+	updateTeam = async (req: Request, res: Response) => {
 		const { team_id, user_id, team_name, team_desc, team_user_name } = req.body;
 		try {
 			await queryPromise(`UPDATE teams SET team_name = '${team_name}', team_desc = '${team_desc}', team_user_name = '${team_user_name}' 
@@ -154,12 +144,41 @@ class TeamController {
 
 	// 设置成员权限
 	setMemberIdentity = async (req: Request, res: Response) => {
-		const { team_id, user_id, team_user_identity } = req.body;
+		const { team_id, user_id, team_user_identity, team_user_name, team_project_indentity_list } = req.body;
 		try {
-			await queryPromise(`UPDATE team_members SET team_user_identity = ${team_user_identity} WHERE team_id = ${team_id} AND user_id = ${user_id}`);
+			await queryPromise(
+				`UPDATE team_members SET team_user_name = '${team_user_name}', team_user_identity = ${team_user_identity} WHERE team_id = ${team_id} AND user_id = ${user_id}`
+			);
+
+			if (team_project_indentity_list.length > 0) {
+				team_project_indentity_list.forEach(async (item: any) => {
+					const { project_id, project_user_identity } = item;
+					await queryPromise(
+						`UPDATE team_project SET project_user_identity = ${project_user_identity} WHERE user_id = ${user_id} AND project_id = ${project_id}`
+					);
+				});
+			}
+
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'set member identity success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 移除某成员
+	removeMember = async (req: Request, res: Response) => {
+		const { team_id, user_id } = req.body;
+		try {
+			await queryPromise(`DELETE FROM team_members WHERE team_id = ${team_id} AND user_id = ${user_id}`);
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'remove member success',
 			});
 		} catch (error: any) {
 			res.status(500).json({

@@ -7,10 +7,10 @@ import path from 'path';
 const router = express.Router();
 
 const storage = multer.diskStorage({
-	destination(req, file, cb) {
+	destination(_, __, cb) {
 		cb(null, 'public/uploads/images/avatars');
 	},
-	filename(req, file, cb) {
+	filename(_, file, cb) {
 		cb(null, `${Date.now()}_${Math.floor(Math.random() * 1e9)}${path.extname(file.originalname)}`);
 	},
 });
@@ -38,6 +38,6 @@ router.post('/update-info', auth, userController.updateInfo);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 
 // 根据用户名搜索用户
-router.get('/search', auth, userController.searchUser);
+router.get('/searchuser', userController.searchUser);
 
 export default router;
