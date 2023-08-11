@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
-import { queryPromise } from '../utils/index';
+import { queryPromise, getPresentTime } from '../utils/index';
 import { OkPacket } from 'mysql';
 
-interface ApiList {
+interface ApiListItem {
 	id: number;
 	name: string;
 	type: 'dictionary' | 'GET' | 'POST' | 'PUT' | 'DELETE';
-	children: ApiList[];
+	children: ApiListItem[];
 }
 
 class ProjectsController {
@@ -25,6 +25,11 @@ class ProjectsController {
 			// 3. 新建这个项目的接口根目录
 			const sql3 = `INSERT INTO dictionaries (project_id, dictionary_name) VALUES (${projectResult.insertId}, '根目录')`;
 			await queryPromise(sql3);
+
+			// 4. 预置这个项目的环境：0~3：开发环境、测试环境、正式环境、mock.js环境
+			for (let i = 0; i < 4; i++) {
+				await queryPromise('INSERT INTO project_env (project_id, env_type) VALUES (?, ?) ', [projectResult.insertId, i]);
+			}
 
 			res.status(200).json({
 				result_code: 0,
@@ -98,11 +103,12 @@ class ProjectsController {
 	getProjectApis = async (req: Request, res: Response) => {
 		const { project_id } = req.query;
 		try {
-			let result: ApiList[] = [];
+			let result: ApiListItem[] = [];
 			// 1. 获取所有的目录
 			const sql = `SELECT * FROM dictionaries WHERE project_id = ${project_id}`;
 			const dictionariesSource = await queryPromise(sql);
 
+			// 2. 获取到项目根目录
 			const root = dictionariesSource.find((item: any) => item.father_id === null);
 			result.push({
 				id: root.dictionary_id,
@@ -111,9 +117,9 @@ class ProjectsController {
 				children: [],
 			});
 
-			// 2. 根据father_id构建目录树。如果father_id为null，则为根目录
+			// 3. 根据father_id构建目录树
 			const buildTree = (father_id: number) => {
-				const children: ApiList[] = [];
+				const children: ApiListItem[] = [];
 				dictionariesSource.forEach((item: any) => {
 					if (item.father_id === father_id) {
 						children.push({
@@ -129,12 +135,12 @@ class ProjectsController {
 
 			result[0].children = buildTree(root.dictionary_id);
 
-			// 遍历目录树，根据dictionary_id，获取每个目录下的接口
-			const getApis = async (tree: ApiList[]) => {
+			// 4. 遍历目录树，根据dictionary_id获取每个目录下的接口
+			const getApis = async (tree: ApiListItem[]) => {
 				for (let i = 0; i < tree.length; i++) {
 					const sql = `SELECT * FROM apis WHERE dictionary_id = ${tree[i].id}`;
 					const apisSource = await queryPromise(sql);
-					const children: ApiList[] = [];
+					const children: ApiListItem[] = [];
 					apisSource.forEach((item: any) => {
 						children.push({
 							id: item.api_id,
@@ -167,6 +173,190 @@ class ProjectsController {
 	getApiDetail = async (req: Request, res: Response) => {
 		const { api_id } = req.query;
 		try {
+			// 1. 获取该接口基本信息，并结构出project_id, dictionary_id, response_id
+			const apiInfoSource = await queryPromise('SELECT * FROM apis WHERE api_id = ? ', api_id);
+			const { project_id, dictionary_id, response_id, ...apiInfo } = apiInfoSource[0];
+
+			// 2. 获取该接口的前置url
+			const projectCurrentType = (await queryPromise('SELECT project_current_type FROM projects WHERE project_id = ? ', project_id))[0];
+			const baseUrl = (
+				await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ? ', [project_id, projectCurrentType])
+			)[0];
+
+			// 3. 获取该接口的列表形式请求参数
+			const paramsSource = await queryPromise('SELECT * FROM request_params WHERE api_id = ? ', api_id);
+			let api_request_params: any[] = [];
+			for (let i = 0; i < 5; i++) {
+				const paramsClassified = paramsSource.filter((item: any) => item.param_type === i);
+				let paramsItem = {
+					type: i,
+					params_list: paramsClassified.map((item: any) => {
+						return {
+							name: item.param_name,
+							type: item.param_type,
+							desc: item.param_desc,
+						};
+					}),
+				};
+				api_request_params.push(paramsItem);
+			}
+
+			// 4. 获取该接口JSON形式的请求参数
+			const api_request_JSON = (await queryPromise('SELECT JSON_body FROM request_JSON WHERE api_id = ? ', api_id))[0];
+
+			// 5. 获取该接口的响应参数
+			const { response_id: api_response_id, ...api_response } = (await queryPromise('SELECT * FROM api_responses WHERE api_id = ? ', api_id))[0];
+
+			// 6. 最终结果组装并返回
+			const result = {
+				...apiInfo,
+				api_env_url: baseUrl,
+				api_request_params,
+				api_request_JSON,
+				api_response,
+			};
+
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'get api detail success',
+				api_info: result,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 新增接口
+	addApi = async (req: Request, res: Response) => {
+		const { api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
+		try {
+			// 1. 先插入api_response，拿到response_id
+			const response_id = (await queryPromise('INSERT INTO api_responses SET ?', api_response)).insertId;
+
+			// 2. 插入api_info，拿到api_id
+			const presentTime = getPresentTime();
+			const api_id = (
+				await queryPromise('INSERT INTO apis SET ?', {
+					...apiInfo,
+					api_createdAt: presentTime,
+					api_updatedAt: presentTime,
+					response_id,
+				})
+			).insertId;
+
+			// 3. 插入api_request_params
+			const paramsList: any[] = [];
+			api_request_params.forEach((item: any) => {
+				item.params_list.forEach((param: any) => {
+					paramsList.push({
+						api_id,
+						param_name: param.name,
+						param_type: item.type,
+						param_desc: param.desc,
+					});
+				});
+			});
+			await queryPromise('INSERT INTO request_params SET ?', paramsList);
+
+			// 4. 插入api_request_JSON
+			await queryPromise('INSERT INTO request_JSON SET ?', {
+				api_id,
+				JSON_body: api_request_JSON,
+			});
+
+			// 5. 返回结果
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'add api success',
+				api_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 更新接口
+	updateApi = async (req: Request, res: Response) => {
+		const { api_id, api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
+		try {
+			// 1. 更新api_info
+			const presentTime = getPresentTime();
+			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, api_updatedAt: presentTime }, api_id]);
+
+			// 2. 更新api_response
+			await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
+
+			// 3. 更新api_request_params
+			const paramsList: any[] = [];
+			api_request_params.forEach((item: any) => {
+				item.params_list.forEach((param: any) => {
+					paramsList.push({
+						api_id,
+						param_name: param.name,
+						param_type: item.type,
+						param_desc: param.desc,
+					});
+				});
+			});
+			await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
+			await queryPromise('INSERT INTO request_params SET ?', paramsList);
+
+			// 4. 更新api_request_JSON
+			await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
+
+			// 5. 返回结果
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'update api success',
+				api_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 删除接口
+	deleteApi = async (req: Request, res: Response) => {
+		const { api_id } = req.body;
+		try {
+			await queryPromise('DELETE FROM apis WHERE api_id = ?', api_id);
+
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'delete api success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_message: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 新增目录
+	addDictionary = async (req: Request, res: Response) => {
+		const { ...dictionaryInfo } = req.body;
+		try {
+			const dictionary_id = (
+				await queryPromise('INSERT INTO dictionaries SET ?', {
+					...dictionaryInfo,
+				})
+			).insertId;
+
+			res.status(200).json({
+				result_code: 0,
+				result_message: 'add dictionary success',
+				dictionary_id,
+			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,

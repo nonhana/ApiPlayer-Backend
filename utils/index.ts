@@ -30,3 +30,16 @@ export const queryPromise = (options: string | QueryOptions, values?: any): Prom
 		}
 	});
 };
+
+// 获取当前时间，并转为 yyyy-mm-dd hh:mm:ss 的格式返回
+export const getPresentTime = () => {
+	const date = new Date();
+	const year = date.getFullYear();
+	const month = date.getMonth() + 1;
+	const day = date.getDate();
+	const hour = date.getHours();
+	const minute = date.getMinutes();
+	const second = date.getSeconds();
+
+	return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+};
