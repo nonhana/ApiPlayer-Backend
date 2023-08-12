@@ -7,6 +7,7 @@ import logger from 'morgan';
 import teamsRouter from './routes/teams';
 import usersRouter from './routes/users';
 import projectsRouter from './routes/projects';
+import apisRouter from './routes/apis';
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(express.static('public'));
 app.use('/teams', teamsRouter);
 app.use('/users', usersRouter);
 app.use('/projects', projectsRouter);
+app.use('/apis', apisRouter);
 
 // catch 404 and forward to error handler
 app.use(function (_, __, next) {

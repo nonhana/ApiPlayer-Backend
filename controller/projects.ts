@@ -33,12 +33,12 @@ class ProjectsController {
 
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'add project success',
+				result_msg: 'add project success',
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
@@ -61,18 +61,18 @@ class ProjectsController {
 			}
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'add recent project success',
+				result_msg: 'add recent project success',
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
 
 	// 获取某用户最近访问的项目列表
-	getRecentProjects = async (req: Request, res: Response) => {
+	getRecentlyVisited = async (req: Request, res: Response) => {
 		const { user_id } = req.query;
 		try {
 			const sql = `SELECT * FROM recently_visited WHERE user_id = ${user_id} ORDER BY last_access_time DESC LIMIT 10`;
@@ -88,25 +88,25 @@ class ProjectsController {
 
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'get recent projects success',
+				result_msg: 'get recent projects success',
 				data: result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
 
 	// 获取某项目所有的接口列表(目录+接口)
-	getProjectApis = async (req: Request, res: Response) => {
+	getApiList = async (req: Request, res: Response) => {
 		const { project_id } = req.query;
 		try {
 			let result: ApiListItem[] = [];
 			// 1. 获取所有的目录
-			const sql = `SELECT * FROM dictionaries WHERE project_id = ${project_id}`;
-			const dictionariesSource = await queryPromise(sql);
+			const sql = 'SELECT * FROM dictionaries WHERE project_id = ?';
+			const dictionariesSource = await queryPromise(sql, [project_id]);
 
 			// 2. 获取到项目根目录
 			const root = dictionariesSource.find((item: any) => item.father_id === null);
@@ -118,7 +118,7 @@ class ProjectsController {
 			});
 
 			// 3. 根据father_id构建目录树
-			const buildTree = (father_id: number) => {
+			const buildDicTree = (father_id: number) => {
 				const children: ApiListItem[] = [];
 				dictionariesSource.forEach((item: any) => {
 					if (item.father_id === father_id) {
@@ -126,30 +126,28 @@ class ProjectsController {
 							id: item.dictionary_id,
 							name: item.dictionary_name,
 							type: 'dictionary',
-							children: buildTree(item.dictionary_id),
+							children: buildDicTree(item.dictionary_id),
 						});
 					}
 				});
 				return children;
 			};
 
-			result[0].children = buildTree(root.dictionary_id);
+			result[0].children = buildDicTree(root.dictionary_id);
 
 			// 4. 遍历目录树，根据dictionary_id获取每个目录下的接口
 			const getApis = async (tree: ApiListItem[]) => {
 				for (let i = 0; i < tree.length; i++) {
-					const sql = `SELECT * FROM apis WHERE dictionary_id = ${tree[i].id}`;
-					const apisSource = await queryPromise(sql);
-					const children: ApiListItem[] = [];
+					const sql = 'SELECT * FROM apis WHERE dictionary_id = ?';
+					const apisSource = await queryPromise(sql, tree[i].id);
 					apisSource.forEach((item: any) => {
-						children.push({
+						tree[i].children.push({
 							id: item.api_id,
-							name: item.api_name,
 							type: item.api_method,
+							name: item.api_name,
 							children: [],
 						});
 					});
-					tree[i].children = children;
 					await getApis(tree[i].children);
 				}
 			};
@@ -158,186 +156,13 @@ class ProjectsController {
 			// 将处理完的结果返回
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'get project apis success',
+				result_msg: 'get project apis success',
 				data: result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
-			});
-		}
-	};
-
-	// 获取某API详情信息
-	getApiDetail = async (req: Request, res: Response) => {
-		const { api_id } = req.query;
-		try {
-			// 1. 获取该接口基本信息，并结构出project_id, dictionary_id, response_id
-			const apiInfoSource = await queryPromise('SELECT * FROM apis WHERE api_id = ? ', api_id);
-			const { project_id, dictionary_id, response_id, ...apiInfo } = apiInfoSource[0];
-
-			// 2. 获取该接口的前置url
-			const projectCurrentType = (await queryPromise('SELECT project_current_type FROM projects WHERE project_id = ? ', project_id))[0];
-			const baseUrl = (
-				await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ? ', [project_id, projectCurrentType])
-			)[0];
-
-			// 3. 获取该接口的列表形式请求参数
-			const paramsSource = await queryPromise('SELECT * FROM request_params WHERE api_id = ? ', api_id);
-			let api_request_params: any[] = [];
-			for (let i = 0; i < 5; i++) {
-				const paramsClassified = paramsSource.filter((item: any) => item.param_type === i);
-				let paramsItem = {
-					type: i,
-					params_list: paramsClassified.map((item: any) => {
-						return {
-							name: item.param_name,
-							type: item.param_type,
-							desc: item.param_desc,
-						};
-					}),
-				};
-				api_request_params.push(paramsItem);
-			}
-
-			// 4. 获取该接口JSON形式的请求参数
-			const api_request_JSON = (await queryPromise('SELECT JSON_body FROM request_JSON WHERE api_id = ? ', api_id))[0];
-
-			// 5. 获取该接口的响应参数
-			const { response_id: api_response_id, ...api_response } = (await queryPromise('SELECT * FROM api_responses WHERE api_id = ? ', api_id))[0];
-
-			// 6. 最终结果组装并返回
-			const result = {
-				...apiInfo,
-				api_env_url: baseUrl,
-				api_request_params,
-				api_request_JSON,
-				api_response,
-			};
-
-			res.status(200).json({
-				result_code: 0,
-				result_message: 'get api detail success',
-				api_info: result,
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				result_code: 1,
-				result_message: error.message || 'An error occurred',
-			});
-		}
-	};
-
-	// 新增接口
-	addApi = async (req: Request, res: Response) => {
-		const { api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
-		try {
-			// 1. 先插入api_response，拿到response_id
-			const response_id = (await queryPromise('INSERT INTO api_responses SET ?', api_response)).insertId;
-
-			// 2. 插入api_info，拿到api_id
-			const presentTime = getPresentTime();
-			const api_id = (
-				await queryPromise('INSERT INTO apis SET ?', {
-					...apiInfo,
-					api_createdAt: presentTime,
-					api_updatedAt: presentTime,
-					response_id,
-				})
-			).insertId;
-
-			// 3. 插入api_request_params
-			const paramsList: any[] = [];
-			api_request_params.forEach((item: any) => {
-				item.params_list.forEach((param: any) => {
-					paramsList.push({
-						api_id,
-						param_name: param.name,
-						param_type: item.type,
-						param_desc: param.desc,
-					});
-				});
-			});
-			await queryPromise('INSERT INTO request_params SET ?', paramsList);
-
-			// 4. 插入api_request_JSON
-			await queryPromise('INSERT INTO request_JSON SET ?', {
-				api_id,
-				JSON_body: api_request_JSON,
-			});
-
-			// 5. 返回结果
-			res.status(200).json({
-				result_code: 0,
-				result_message: 'add api success',
-				api_id,
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				result_code: 1,
-				result_message: error.message || 'An error occurred',
-			});
-		}
-	};
-
-	// 更新接口
-	updateApi = async (req: Request, res: Response) => {
-		const { api_id, api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
-		try {
-			// 1. 更新api_info
-			const presentTime = getPresentTime();
-			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, api_updatedAt: presentTime }, api_id]);
-
-			// 2. 更新api_response
-			await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
-
-			// 3. 更新api_request_params
-			const paramsList: any[] = [];
-			api_request_params.forEach((item: any) => {
-				item.params_list.forEach((param: any) => {
-					paramsList.push({
-						api_id,
-						param_name: param.name,
-						param_type: item.type,
-						param_desc: param.desc,
-					});
-				});
-			});
-			await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
-			await queryPromise('INSERT INTO request_params SET ?', paramsList);
-
-			// 4. 更新api_request_JSON
-			await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
-
-			// 5. 返回结果
-			res.status(200).json({
-				result_code: 0,
-				result_message: 'update api success',
-				api_id,
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				result_code: 1,
-				result_message: error.message || 'An error occurred',
-			});
-		}
-	};
-
-	// 删除接口
-	deleteApi = async (req: Request, res: Response) => {
-		const { api_id } = req.body;
-		try {
-			await queryPromise('DELETE FROM apis WHERE api_id = ?', api_id);
-
-			res.status(200).json({
-				result_code: 0,
-				result_message: 'delete api success',
-			});
-		} catch (error: any) {
-			res.status(500).json({
-				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
@@ -354,13 +179,225 @@ class ProjectsController {
 
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'add dictionary success',
+				result_msg: 'add dictionary success',
 				dictionary_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 更新目录
+	updateDictionary = async (req: Request, res: Response) => {
+		const { dictionary_id, ...dictionaryInfo } = req.body;
+		try {
+			await queryPromise('UPDATE dictionaries SET ? WHERE dictionary_id = ?', [dictionaryInfo, dictionary_id]);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'update dictionary success',
+				dictionary_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 删除目录
+	deleteDictionary = async (req: Request, res: Response) => {
+		const { dictionary_id } = req.body;
+		try {
+			await queryPromise('DELETE FROM dictionaries WHERE dictionary_id = ?', dictionary_id);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'delete dictionary success',
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 获取某个项目的基本信息
+	getBasicInfo = async (req: Request, res: Response) => {
+		const { project_id } = req.query;
+		try {
+			const projectInfo = await queryPromise('SELECT * FROM projects WHERE project_id = ?', project_id);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'get project info success',
+				project_info: projectInfo[0],
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 修改项目的基本信息
+	updateBasicInfo = async (req: Request, res: Response) => {
+		const { project_id, ...projectInfo } = req.body;
+		try {
+			await queryPromise('UPDATE projects SET ? WHERE project_id = ?', [projectInfo, project_id]);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'update project info success',
+				project_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 获取某个项目的全局信息
+	getGlobalInfo = async (req: Request, res: Response) => {
+		const { project_id } = req.query;
+		try {
+			// 1. 获取全局参数
+			let global_params: any = [];
+			const paramsSource = await queryPromise('SELECT * FROM global_params WHERE project_id = ?', project_id);
+			for (let i = 0; i < 3; i++) {
+				const tempParams: any[] = paramsSource.filter((item: any) => item.father_type === i);
+				if (tempParams.length > 0) {
+					let item = {
+						type: i,
+						params_list: tempParams.map((param: any) => {
+							return {
+								param_id: param.param_id,
+								param_name: param.param_name,
+								param_type: param.param_type,
+								param_desc: param.param_desc,
+								param_value: param.param_value,
+							};
+						}),
+					};
+					global_params.push(item);
+				}
+			}
+
+			// 2. 获取全局变量
+			const variablesSource = await queryPromise('SELECT * FROM global_variables WHERE project_id = ?', project_id);
+			const global_variables = variablesSource.map((variable: any) => {
+				return {
+					variable_name: variable.variable_name,
+					variable_type: variable.variable_type,
+					variable_value: variable.variable_value,
+					variable_desc: variable.variable_desc,
+				};
+			});
+
+			// 3. 获取环境列表
+			const env_list = await queryPromise('SELECT env_type, env_baseurl FROM project_env WHERE project_id = ?', project_id);
+
+			// 4. 结果组装返回
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'get project global info success',
+				global_params,
+				global_variables,
+				env_list,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 更新某个项目的全局信息
+	updateGlobalInfo = async (req: Request, res: Response) => {
+		console.log(req.body);
+		const { project_id, global_params, global_variables, env_list } = req.body;
+		try {
+			// 1. 更新全局参数
+			for (let i = 0; i < global_params.length; i++) {
+				const type = global_params[i].type;
+				const params_list = global_params[i].params_list;
+				for (let j = 0; j < params_list.length; j++) {
+					const param_id = params_list[j].param_id;
+					const param_name = params_list[j].param_name;
+					const param_type = params_list[j].param_type;
+					const param_desc = params_list[j].param_desc;
+					const param_value = params_list[j].param_value;
+					if (param_id) {
+						await queryPromise('UPDATE global_params SET ? WHERE param_id = ?', [{ param_name, param_type, param_desc, param_value }, param_id]);
+					} else {
+						await queryPromise('INSERT INTO global_params SET ?', { project_id, father_type: type, param_name, param_type, param_desc, param_value });
+					}
+				}
+			}
+
+			// 2. 更新全局变量
+			await queryPromise('DELETE FROM global_variables WHERE project_id = ?', project_id);
+			for (let i = 0; i < global_variables.length; i++) {
+				const variable_id = global_variables[i].variable_id;
+				const variable_name = global_variables[i].variable_name;
+				const variable_type = global_variables[i].variable_type;
+				const variable_value = global_variables[i].variable_value;
+				const variable_desc = global_variables[i].variable_desc;
+
+				if (variable_id) {
+					await queryPromise('UPDATE global_variables SET ? WHERE variable_id = ?', [
+						{ variable_name, variable_type, variable_value, variable_desc },
+						variable_id,
+					]);
+				} else {
+					await queryPromise('INSERT INTO global_variables SET ?', { project_id, variable_name, variable_type, variable_value, variable_desc });
+				}
+			}
+
+			// 3. 更新环境列表
+			for (let i = 0; i < env_list.length; i++) {
+				const env_type = env_list[i].env_type;
+				const env_baseurl = env_list[i].env_baseurl;
+				await queryPromise('UPDATE project_env SET ? WHERE project_id = ? AND env_type = ?', [{ env_baseurl }, project_id, env_type]);
+			}
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'update project global info success',
+				project_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 删除项目
+	deleteProject = async (req: Request, res: Response) => {
+		const { project_id } = req.body;
+		try {
+			await queryPromise('DELETE FROM projects WHERE project_id = ?', project_id);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'delete project success',
+				project_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};

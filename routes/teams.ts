@@ -19,12 +19,12 @@ router.post('/deleteteam', teamController.deleteTeam);
 router.post('/updateteam', teamController.updateTeam);
 
 // 邀请用户加入团队
-router.post('inviteuser', teamController.inviteUser);
+router.post('/inviteuser', teamController.inviteUser);
 
 // 设置成员权限
-router.post('setmemberidentity', teamController.setMemberIdentity);
+router.post('/setmemberidentity', teamController.setMemberIdentity);
 
 // 移除某成员
-router.post('removemember', teamController.removeMember);
+router.post('/removemember', teamController.removeMember);
 
 export default router;

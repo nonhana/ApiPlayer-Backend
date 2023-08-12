@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getMissingParam, queryPromise } from '../utils/index';
+import { getMissingParam, queryPromise, getPresentTime } from '../utils/index';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -89,10 +89,9 @@ class UserController {
 				res.status(200).json({ message: '该 email 已存在' });
 				return;
 			}
-		} catch (error: any) {
+		} catch (error) {
 			res.status(500).json({
 				message: '注册失败',
-				error: error.message,
 			});
 			return;
 		}
@@ -109,14 +108,19 @@ class UserController {
 		const passwordEncrypted = bcrypt.hashSync(password, salt);
 
 		try {
-			const insertRes = await queryPromise('INSERT INTO users SET ?', { email, password: passwordEncrypted });
+			await queryPromise('INSERT INTO users SET ?', {
+				email,
+				password: passwordEncrypted,
+				createdAt: getPresentTime(),
+				updatedAt: getPresentTime(),
+			});
 			res.json({ message: '注册成功' });
 		} catch (error) {
-			res.status(500).json({ message: '注册失败' });
+			res.status(500).json({ message: '注册失败', error });
 		}
 	};
 
-	// 登陆
+	// 登录
 	login = async (req: Request, res: Response) => {
 		const missingParam = getMissingParam(['email', 'password'], req.body);
 
@@ -141,21 +145,23 @@ class UserController {
 				res.status(200).json({ message: 'password 不正确' });
 				return;
 			}
+
+			// IIFE写法，限制password的作用域
 			(() => {
 				const { password, ...restUserInfo } = userInfo;
 
-				// 颁发token 根据 id user_name is_admin
+				// 根据 id user_name is_admin来颁发token
 				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
 
 				res.json({
-					message: '登陆成功',
+					message: '登录成功',
 					result: {
 						token,
 					},
 				});
 			})();
 		} catch (error) {
-			res.status(500).json({ message: '登陆失败' });
+			res.status(500).json({ message: '登录失败' });
 			return;
 		}
 	};
@@ -163,13 +169,13 @@ class UserController {
 	// 获取用户信息
 	info = async (req: Request, res: Response) => {
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE id = ?', (req as any).state.userInfo.id);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
 
-			const { id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
 
 			res.status(200).json({ message: '获取成功', result: { userInfo } });
 		} catch (error) {
-			res.status(500).json({ message: '获取用户信息失败' });
+			res.status(500).json({ message: '获取用户信息失败', error });
 		}
 	};
 
@@ -185,10 +191,10 @@ class UserController {
 		}
 
 		try {
-			const updateRes = await queryPromise('UPDATE users SET ? WHERE id = ?', [req.body, (req as any).state.userInfo.id]);
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE id = ?', (req as any).state.userInfo.id);
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [req.body, (req as any).state.userInfo.user_id]);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
 
-			const { id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
 
 			res.status(200).json({ message: '更新成功', result: { userInfo } });
 		} catch (error) {
@@ -204,7 +210,7 @@ class UserController {
 		}
 		const avatarPath = `http://${req.get('host')}${req.file.path.replace('public', '')}`;
 		try {
-			const updateRes = await queryPromise('UPDATE users SET ? WHERE id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.id]);
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
 		} catch (error) {
 			res.status(500).json({ message: 'File uploaded failed' });
 		}
@@ -220,7 +226,12 @@ class UserController {
 	searchUser = async (req: Request, res: Response) => {
 		const { username } = req.query;
 		try {
-			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
+			const usersSource = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
+
+			const retrieveRes = usersSource.map((user: any) => {
+				const { user_id, password, createdAt, updatedAt, ...userInfo } = user;
+				return userInfo;
+			});
 
 			res.status(200).json({
 				result_code: 0,

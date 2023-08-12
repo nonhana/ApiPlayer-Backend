@@ -11,6 +11,7 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 	const { headers } = req;
 	const { authorization } = headers;
 
+	// 此处直接预置了Bearer，不用加了
 	const token = (authorization as string)?.replace('Bearer ', '');
 
 	console.log(headers, { authorization });

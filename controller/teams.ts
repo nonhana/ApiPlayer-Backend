@@ -7,8 +7,8 @@ class TeamController {
 	getTeamList = async (req: Request, res: Response) => {
 		const { user_id } = req.query;
 		try {
-			const teamIdList = await queryPromise(`SELECT team_id FROM team_members WHERE user_id = ${user_id}`);
-			const source = await queryPromise(`SELECT * FROM teams WHERE team_id IN (${teamIdList})`);
+			const teamIdList = (await queryPromise(`SELECT team_id FROM team_members WHERE user_id = ${user_id}`)).map((item: any) => item.team_id);
+			const source = await queryPromise('SELECT * FROM teams WHERE team_id IN (?)', [teamIdList.join(',')]);
 			const result = source.map((item: any) => {
 				return {
 					team_id: item.team_id,
@@ -34,7 +34,7 @@ class TeamController {
 		const { team_id, user_id } = req.query;
 		try {
 			const [memberList, projectList, teamInfoSource, userTeamName] = await Promise.all([
-				queryPromise(`SELECT user_id, username, avator FROM users WHERE user_id IN (SELECT user_id FROM team_members WHERE team_id = ${team_id})`),
+				queryPromise(`SELECT user_id, username, avatar FROM users WHERE user_id IN (SELECT user_id FROM team_members WHERE team_id = ${team_id})`),
 				queryPromise(`SELECT project_id, project_name, project_img FROM projects WHERE team_id = ${team_id}`),
 				queryPromise(`SELECT team_id, team_name, team_desc FROM teams WHERE team_id = ${team_id}`),
 				queryPromise(`SELECT team_user_name FROM team_members WHERE team_id = ${team_id} AND user_id = ${user_id}`),
@@ -43,7 +43,7 @@ class TeamController {
 			const memberListFormatted = memberList.map((item: any) => ({
 				user_id: item.user_id,
 				user_name: item.username,
-				user_avatar: item.avator,
+				user_avatar: item.avatar,
 			}));
 
 			const teamInfo = {
@@ -110,8 +110,9 @@ class TeamController {
 	updateTeam = async (req: Request, res: Response) => {
 		const { team_id, user_id, team_name, team_desc, team_user_name } = req.body;
 		try {
-			await queryPromise(`UPDATE teams SET team_name = '${team_name}', team_desc = '${team_desc}', team_user_name = '${team_user_name}' 
-			WHERE team_id = ${team_id} AND user_id = ${user_id}`);
+			await queryPromise('UPDATE teams SET team_name = ?, team_desc = ? WHERE team_id = ?', [team_name, team_desc, team_id]);
+			await queryPromise(`UPDATE team_members SET team_user_name = ? WHERE team_id = ? AND user_id = ?`, [team_user_name, team_id, user_id]);
+
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'update team info success',
@@ -128,7 +129,7 @@ class TeamController {
 	inviteUser = async (req: Request, res: Response) => {
 		const { team_id, user_id, team_user_name } = req.body;
 		try {
-			// 默认身份：0-游客，1-成员，2-管理员，3-所有者
+			// 默认身份：0-游客。成员身份一览：0-游客，1-成员，2-管理员，3-所有者
 			await queryPromise(`INSERT INTO team_members (user_id, team_id, team_user_name) VALUES (${user_id}, ${team_id}, '${team_user_name}')`);
 			res.status(200).json({
 				result_code: 0,

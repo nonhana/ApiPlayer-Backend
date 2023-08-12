@@ -31,7 +31,7 @@ export const queryPromise = (options: string | QueryOptions, values?: any): Prom
 	});
 };
 
-// 获取当前时间，并转为 yyyy-mm-dd hh:mm:ss 的格式返回
+// 获取当前时间，并转为 yyyy-mm-dd hh:mm:ss 的格式返回。如果不足两位，则在前面补 0
 export const getPresentTime = () => {
 	const date = new Date();
 	const year = date.getFullYear();
@@ -41,5 +41,12 @@ export const getPresentTime = () => {
 	const minute = date.getMinutes();
 	const second = date.getSeconds();
 
-	return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+	return `
+	${year}-
+	${month < 10 ? '0' + month : month}-
+	${day < 10 ? '0' + day : day} 
+	${hour < 10 ? '0' + hour : hour}:
+	${minute < 10 ? '0' + minute : minute}:
+	${second < 10 ? '0' + second : second}
+	`;
 };
