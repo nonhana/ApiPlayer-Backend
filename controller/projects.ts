@@ -323,7 +323,6 @@ class ProjectsController {
 
 	// 更新某个项目的全局信息
 	updateGlobalInfo = async (req: Request, res: Response) => {
-		console.log(req.body);
 		const { project_id, global_params, global_variables, env_list } = req.body;
 		try {
 			// 1. 更新全局参数

@@ -22,7 +22,6 @@ class UserController {
 	// 发送验证码
 	sendCaptcha = async (req: Request, res: Response) => {
 		const { email } = req.body;
-		console.log({ email });
 
 		// 生成随机的验证码，这里简单起见使用 6 位数的数字验证码
 		const verificationCode = String(1e5 + Math.floor(Math.random() * 1e5 * 9));
@@ -61,10 +60,8 @@ class UserController {
 				}
 			) => {
 				if (error) {
-					console.log(error);
 					res.status(500).json({ message: '发送验证码失败' });
 				} else {
-					console.log('Email sent: ' + info?.response);
 					res.status(200).json({ message: '验证码已发送' });
 				}
 			}
