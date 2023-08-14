@@ -73,6 +73,7 @@ class TeamController {
 		const { user_id, team_name, team_desc, team_user_name } = req.body;
 		try {
 			const teamId: OkPacket = await queryPromise(`INSERT INTO teams (team_name, team_desc) VALUES ('${team_name}', '${team_desc}')`);
+
 			// 创建团队的时候，创建人是团队所有者
 			await queryPromise(
 				`INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (${user_id}, ${teamId.insertId}, '${team_user_name}', 3)`

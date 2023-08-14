@@ -38,6 +38,6 @@ router.post('/update-info', auth, userController.updateInfo);
 router.post('/upload-avatar', auth, upload.single('avatar'), userController.uploadAvatar);
 
 // 根据用户名搜索用户
-router.get('/searchuser', userController.searchUser);
+router.get('/searchuser', auth, userController.searchUser);
 
 export default router;

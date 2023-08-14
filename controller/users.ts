@@ -147,6 +147,14 @@ class UserController {
 			(() => {
 				const { password, ...restUserInfo } = userInfo;
 
+				const user_info = {
+					user_id: restUserInfo.user_id,
+					user_name: restUserInfo.username,
+					user_img: restUserInfo.avatar,
+					user_email: restUserInfo.email,
+					user_introduce: restUserInfo.introduce,
+				};
+
 				// 根据 id user_name is_admin来颁发token
 				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
 
@@ -154,6 +162,7 @@ class UserController {
 					message: '登录成功',
 					result: {
 						token,
+						user_info,
 					},
 				});
 			})();
