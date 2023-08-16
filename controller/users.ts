@@ -1,29 +1,23 @@
 import { Request, Response } from 'express';
-import { getMissingParam, queryPromise } from '../utils/index';
+import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-
-interface registerRequestBody {
-	email: string;
-	captcha: string;
-	password: string;
-}
+import { AVATAR_BASE_PATH } from '../constance';
 
 class UserController {
 	emailCaptchaMap: Map<string, string>;
 
 	constructor() {
 		this.emailCaptchaMap = new Map();
-		this.sendCaptcha = this.sendCaptcha.bind(this);
 	}
 
 	sendCaptcha = async (req: Request, res: Response) => {
 		const { email } = req.body;
-		console.log({ email });
 
-		// 生成随机的验证码，这里简单起见使用 6 位数的数字验证码
+		// 生成随机的 6 位数的数字验证码
 		const verificationCode = String(1e5 + Math.floor(Math.random() * 1e5 * 9));
+		console.log({ verificationCode });
 		this.emailCaptchaMap.set(email, verificationCode);
 
 		setTimeout(() => {
@@ -43,7 +37,7 @@ class UserController {
 
 		// 设置电子邮件的内容
 		const mailOptions = {
-			from: 'api_player@163.com', // 发件人，必须与配置中的一致
+			from: 'api_player@163.com', // 发件人
 			to: email, // 收件人，通过请求获取的用户邮箱地址
 			subject: 'ApiPlayer验证码', // 邮件主题
 			text: `ApiPlayer，您的验证码是：${verificationCode}，三分钟内有效。`, // 邮件内容
@@ -59,42 +53,34 @@ class UserController {
 				}
 			) => {
 				if (error) {
-					console.log(error);
-					res.status(500).json({ message: '发送验证码失败' });
+					errorHandler({ error, result_msg: '发送验证码失败', res });
 				} else {
 					console.log('Email sent: ' + info?.response);
-					res.status(200).json({ message: '验证码已发送' });
+					unifiedResponseBody({ result_msg: '验证码已发送', res });
 				}
 			}
 		);
 	};
 
-	register = async (req: Request<{}, {}, registerRequestBody>, res: Response) => {
-		const missingParam = getMissingParam(['email', 'captcha', 'password'], req.body);
-
-		if (missingParam) {
-			res.status(400).json({ message: `${missingParam} 缺失` });
-			return;
-		}
-
+	register = async (req: Request, res: Response) => {
 		const { email, captcha, password } = req.body;
 
 		try {
 			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE email='${email}'`);
 
 			if (retrieveRes.length > 0) {
-				res.status(200).json({ message: '该 email 已存在' });
+				unifiedResponseBody({ result_code: 1, result_msg: '该 email 已存在', res });
 				return;
 			}
 		} catch (error) {
-			res.status(500).json({ message: '注册失败' });
+			errorHandler({ error, result_msg: '注册失败', res });
 			return;
 		}
 
 		const emailVerificationCode = this.emailCaptchaMap.get(email);
 
 		if (captcha !== emailVerificationCode) {
-			res.status(401).json({ message: `验证码不正确` });
+			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
 			return;
 		}
 
@@ -103,107 +89,78 @@ class UserController {
 		const passwordEncrypted = bcrypt.hashSync(password, salt);
 
 		try {
-			const insertRes = await queryPromise('INSERT INTO users SET ?', { email, password: passwordEncrypted });
-			res.json({ message: '注册成功' });
+			await queryPromise('INSERT INTO users SET ?', { email, password: passwordEncrypted });
+			unifiedResponseBody({ result_msg: '注册成功', res });
 		} catch (error) {
-			res.status(500).json({ message: '注册失败' });
+			errorHandler({ error, result_msg: '注册失败', res });
 		}
 	};
 
 	login = async (req: Request, res: Response) => {
-		const missingParam = getMissingParam(['email', 'password'], req.body);
-
-		if (missingParam) {
-			res.status(400).json({ message: `${missingParam} 缺失` });
-			return;
-		}
-
 		const { email, password } = req.body;
 
 		try {
 			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE email='${email}'`);
 
 			if (retrieveRes.length === 0) {
-				res.status(200).json({ message: '该 email 不存在' });
+				unifiedResponseBody({ result_code: 1, result_msg: '该 email 不存在', res });
 				return;
 			}
 
 			const userInfo = retrieveRes[0];
 			const compareRes = bcrypt.compareSync(password, userInfo.password);
 			if (!compareRes) {
-				res.status(200).json({ message: 'password 不正确' });
+				unifiedResponseBody({ result_code: 1, result_msg: 'password 不正确', res });
 				return;
 			}
 			(() => {
-				const { password, ...restUserInfo } = userInfo;
+				const { password, createdAt, updatedAt, ...restUserInfo } = userInfo;
 
-				// 颁发token 根据 id user_name is_admin
+				// 根据 id, email, username, introduce, avatar 生成token
 				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
 
-				res.json({
-					message: '登陆成功',
-					result: {
-						token,
-					},
-				});
+				unifiedResponseBody({ result_msg: '登陆成功', result: { token }, res });
 			})();
 		} catch (error) {
-			res.status(500).json({ message: '登陆失败' });
-			return;
+			errorHandler({ error, result_msg: '登陆失败', res });
 		}
 	};
 
 	info = async (req: Request, res: Response) => {
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE id = ?', (req as any).state.userInfo.id);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
 
-			const { id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-
-			res.status(200).json({ message: '获取成功', result: { userInfo } });
+			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			unifiedResponseBody({ result_msg: '获取成功', result: { userInfo }, res });
 		} catch (error) {
-			res.status(500).json({ message: '获取用户信息失败' });
+			errorHandler({ error, result_msg: '获取用户信息失败', res });
 		}
 	};
 
 	updateInfo = async (req: Request, res: Response) => {
-		const alterParams = ['username', 'password', 'introduce'];
-
-		const paramsKey = Object.keys(req.body)[0];
-
-		if (!alterParams.includes(paramsKey)) {
-			res.status(400).json({ message: '请正确填写要修改的内容' });
-			return;
-		}
-
 		try {
-			const updateRes = await queryPromise('UPDATE users SET ? WHERE id = ?', [req.body, (req as any).state.userInfo.id]);
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE id = ?', (req as any).state.userInfo.id);
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [req.body, (req as any).state.userInfo.user_id]);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
 
-			const { id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-
-			res.status(200).json({ message: '更新成功', result: { userInfo } });
+			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			unifiedResponseBody({ result_msg: '更新成功', result: { userInfo }, res });
 		} catch (error) {
-			res.status(500).json({ message: '用户信息更新失败' });
+			errorHandler({ error, result_msg: '用户信息更新失败', res });
 		}
 	};
 
 	uploadAvatar = async (req: Request, res: Response) => {
 		if (!req.file) {
-			res.status(400).json({ message: 'No file uploaded' });
+			unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: 'No file uploaded', res });
 			return;
 		}
-		const avatarPath = `http://${req.get('host')}${req.file.path.replace('public', '')}`;
+		const avatarPath = `${AVATAR_BASE_PATH}/${req.file.filename}`;
 		try {
-			const updateRes = await queryPromise('UPDATE users SET ? WHERE id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.id]);
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
+			unifiedResponseBody({ result_msg: 'File uploaded successfully', result: { avatar: avatarPath }, res });
 		} catch (error) {
-			res.status(500).json({ message: 'File uploaded failed' });
+			errorHandler({ error, result_msg: 'File uploaded failed', res });
 		}
-		res.status(200).json({
-			message: 'File uploaded successfully',
-			result: {
-				avatar: avatarPath,
-			},
-		});
 	};
 }
 
