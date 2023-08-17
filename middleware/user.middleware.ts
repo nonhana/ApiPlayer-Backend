@@ -1,8 +1,9 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
+import { unifiedResponseBody, errorHandler } from '../utils/index';
 
 interface AuthenticatedRequest extends Request {
-	state: {
+	state?: {
 		userInfo?: any;
 	};
 }
@@ -14,10 +15,8 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 	// 此处直接预置了Bearer，不用加了
 	const token = (authorization as string)?.replace('Bearer ', '');
 
-	console.log(headers, { authorization });
-
 	if (!token) {
-		res.status(401).json({ message: '缺少 token' });
+		unifiedResponseBody({ httpStatus: 401, result_code: 1, result_msg: '缺少 token', res });
 		return;
 	}
 
@@ -26,12 +25,10 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 		req.state = {};
 		req.state.userInfo = jwt.verify(token, 'apiPlayer');
 	} catch (error: any) {
-		console.log({ error });
-
 		if (error.name === 'TokenExpiredError') {
-			res.status(401).json({ message: 'token 已过期' });
+			errorHandler({ error, httpStatus: 401, result_msg: 'token 已过期', res });
 		} else {
-			res.status(401).json({ message: '无效的 token' });
+			errorHandler({ error, httpStatus: 401, result_msg: '无效的 token', res });
 		}
 
 		return;

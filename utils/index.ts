@@ -1,5 +1,6 @@
 import db from '../database/index';
-import { QueryOptions } from 'mysql';
+import { QueryOptions, queryCallback } from 'mysql';
+import { Response } from 'express';
 
 export const getMissingParam = (requireParams: string[], paramsFromClient: object) => {
 	const paramsFromClientKeys = Object.keys(paramsFromClient);
@@ -31,22 +32,41 @@ export const queryPromise = (options: string | QueryOptions, values?: any): Prom
 	});
 };
 
-// 获取当前时间，并转为 yyyy-mm-dd hh:mm:ss 的格式返回。如果不足两位，则在前面补 0
-export const getPresentTime = () => {
-	const date = new Date();
-	const year = date.getFullYear();
-	const month = date.getMonth() + 1;
-	const day = date.getDate();
-	const hour = date.getHours();
-	const minute = date.getMinutes();
-	const second = date.getSeconds();
+interface UnifiedResponseBodyParams {
+	httpStatus?: number;
+	result_code?: 0 | 1; // 0 fail, 1 success
+	result_msg: string;
+	result?: object;
+	res: Response;
+}
 
-	return `
-	${year}-
-	${month < 10 ? '0' + month : month}-
-	${day < 10 ? '0' + day : day} 
-	${hour < 10 ? '0' + hour : hour}:
-	${minute < 10 ? '0' + minute : minute}:
-	${second < 10 ? '0' + second : second}
-	`;
+interface ErrorHandlerParams {
+	error: any;
+	httpStatus?: number;
+	result_msg: string;
+	result?: object;
+	res: Response;
+}
+
+export const unifiedResponseBody = ({ httpStatus = 200, result_code = 0, result_msg, result = {}, res }: UnifiedResponseBodyParams): void => {
+	res.status(httpStatus).json({
+		result_code,
+		result_msg,
+		result,
+	});
+};
+
+export const errorHandler = ({ error, httpStatus = 500, result_msg, result = {}, res }: ErrorHandlerParams): void => {
+	console.error(error);
+	unifiedResponseBody({
+		httpStatus,
+		result_code: 1,
+		result_msg,
+		result,
+		res,
+	});
+};
+
+export const paramsErrorHandler = (result: object, res: Response) => {
+	unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: '参数错误', result, res });
 };
