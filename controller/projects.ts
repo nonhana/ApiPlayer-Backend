@@ -1,10 +1,10 @@
 import { Request, Response } from 'express';
-import { queryPromise, getPresentTime } from '../utils/index';
-import { OkPacket } from 'mysql';
+import { queryPromise } from '../utils/index';
+import type { OkPacket } from 'mysql';
 
 interface ApiListItem {
 	id: number;
-	name: string;
+	label: string;
 	type: 'dictionary' | 'GET' | 'POST' | 'PUT' | 'DELETE';
 	children: ApiListItem[];
 }
@@ -112,7 +112,7 @@ class ProjectsController {
 			const root = dictionariesSource.find((item: any) => item.father_id === null);
 			result.push({
 				id: root.dictionary_id,
-				name: root.dictionary_name,
+				label: root.dictionary_name,
 				type: 'dictionary',
 				children: [],
 			});
@@ -124,7 +124,7 @@ class ProjectsController {
 					if (item.father_id === father_id) {
 						children.push({
 							id: item.dictionary_id,
-							name: item.dictionary_name,
+							label: item.dictionary_name,
 							type: 'dictionary',
 							children: buildDicTree(item.dictionary_id),
 						});
@@ -144,7 +144,7 @@ class ProjectsController {
 						tree[i].children.push({
 							id: item.api_id,
 							type: item.api_method,
-							name: item.api_name,
+							label: item.api_name,
 							children: [],
 						});
 					});

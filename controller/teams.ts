@@ -5,7 +5,7 @@ import type { OkPacket } from 'mysql';
 class TeamController {
 	// 获取该用户的团队列表
 	getTeamList = async (req: Request, res: Response) => {
-		const { user_id } = req.query;
+		const user_id = (<any>req).state.userInfo.user_id;
 		try {
 			const teamIdList = (await queryPromise(`SELECT team_id FROM team_members WHERE user_id = ${user_id}`)).map((item: any) => item.team_id);
 			const source = await queryPromise('SELECT * FROM teams WHERE team_id IN (?)', [teamIdList.join(',')]);

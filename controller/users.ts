@@ -64,6 +64,7 @@ class UserController {
 		);
 	};
 
+	// 注册
 	register = async (req: Request, res: Response) => {
 		const { email, captcha, password } = req.body;
 
@@ -124,10 +125,10 @@ class UserController {
 				// 根据 id, email, username, introduce, avatar 生成token
 				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
 
-				unifiedResponseBody({ result_msg: '登陆成功', result: { token }, res });
+				unifiedResponseBody({ result_msg: '登录成功', result: { token }, res });
 			})();
 		} catch (error) {
-			errorHandler({ error, result_msg: '登陆失败', res });
+			errorHandler({ error, result_msg: '登录失败', res });
 		}
 	};
 

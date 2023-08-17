@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { queryPromise, getPresentTime } from '../utils/index';
+import { queryPromise } from '../utils/index';
 import axios from 'axios';
 import type { AxiosRequestConfig } from 'axios';
 import qs from 'qs';
@@ -73,12 +73,9 @@ class ApisController {
 			const response_id = (await queryPromise('INSERT INTO api_responses SET ?', api_response)).insertId;
 
 			// 2. 插入api_info，拿到api_id
-			const presentTime = getPresentTime();
 			const api_id = (
 				await queryPromise('INSERT INTO apis SET ?', {
 					...apiInfo,
-					api_createdAt: presentTime,
-					api_updatedAt: presentTime,
 					response_id,
 				})
 			).insertId;
@@ -122,8 +119,7 @@ class ApisController {
 		const { api_id, api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
 		try {
 			// 1. 更新api_info
-			const presentTime = getPresentTime();
-			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, api_updatedAt: presentTime }, api_id]);
+			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo }, api_id]);
 
 			// 2. 更新api_response
 			await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
