@@ -134,10 +134,16 @@ class UserController {
 
 	// 获取用户信息
 	info = async (req: Request, res: Response) => {
+		const { user_id: origin_user_id } = req.body;
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+			let retrieveRes: any = null;
+			if (origin_user_id) {
+				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', origin_user_id);
+			} else {
+				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+			}
 
-			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			const { password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
 			unifiedResponseBody({ result_msg: '获取成功', result: { userInfo }, res });
 		} catch (error) {
 			errorHandler({ error, result_msg: '获取用户信息失败', res });

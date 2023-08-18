@@ -71,7 +71,6 @@ class ApisController {
 		try {
 			// 1. 先插入api_response，拿到response_id
 			const response_id = (await queryPromise('INSERT INTO api_responses SET ?', api_response)).insertId;
-
 			// 2. 插入api_info，拿到api_id
 			const api_id = (
 				await queryPromise('INSERT INTO apis SET ?', {
@@ -80,27 +79,7 @@ class ApisController {
 				})
 			).insertId;
 
-			// 3. 插入api_request_params
-			const paramsList: any[] = [];
-			api_request_params.forEach((item: any) => {
-				item.params_list.forEach((param: any) => {
-					paramsList.push({
-						api_id,
-						param_name: param.name,
-						param_type: item.type,
-						param_desc: param.desc,
-					});
-				});
-			});
-			await queryPromise('INSERT INTO request_params SET ?', paramsList);
-
-			// 4. 插入api_request_JSON
-			await queryPromise('INSERT INTO request_JSON SET ?', {
-				api_id,
-				JSON_body: api_request_JSON,
-			});
-
-			// 5. 返回结果
+			// 3. 返回结果
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'add api success',
@@ -122,25 +101,31 @@ class ApisController {
 			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo }, api_id]);
 
 			// 2. 更新api_response
-			await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
+			if (api_response) {
+				await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
+			}
 
 			// 3. 更新api_request_params
-			const paramsList: any[] = [];
-			api_request_params.forEach((item: any) => {
-				item.params_list.forEach((param: any) => {
-					paramsList.push({
-						api_id,
-						param_name: param.name,
-						param_type: item.type,
-						param_desc: param.desc,
+			if (api_request_params) {
+				const paramsList: any[] = [];
+				api_request_params.forEach((item: any) => {
+					item.params_list.forEach((param: any) => {
+						paramsList.push({
+							api_id,
+							param_name: param.name,
+							param_type: item.type,
+							param_desc: param.desc,
+						});
 					});
 				});
-			});
-			await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
-			await queryPromise('INSERT INTO request_params SET ?', paramsList);
+				await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
+				await queryPromise('INSERT INTO request_params SET ?', paramsList);
+			}
 
 			// 4. 更新api_request_JSON
-			await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
+			if (api_request_JSON) {
+				await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
+			}
 
 			// 5. 返回结果
 			res.status(200).json({

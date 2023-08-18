@@ -138,17 +138,20 @@ class ProjectsController {
 			// 4. 遍历目录树，根据dictionary_id获取每个目录下的接口
 			const getApis = async (tree: ApiListItem[]) => {
 				for (let i = 0; i < tree.length; i++) {
-					const sql = 'SELECT * FROM apis WHERE dictionary_id = ?';
-					const apisSource = await queryPromise(sql, tree[i].id);
-					apisSource.forEach((item: any) => {
-						tree[i].children.push({
-							id: item.api_id,
-							type: item.api_method,
-							label: item.api_name,
-							children: [],
+					// 因为dictionary_id可能等于api_id，所以这里要判断一下是否为目录
+					if (tree[i].type === 'dictionary') {
+						const sql = 'SELECT * FROM apis WHERE dictionary_id = ?';
+						const apisSource = await queryPromise(sql, tree[i].id);
+						apisSource.forEach((item: any) => {
+							tree[i].children.push({
+								id: item.api_id,
+								type: item.api_method,
+								label: item.api_name,
+								children: [],
+							});
 						});
-					});
-					await getApis(tree[i].children);
+						await getApis(tree[i].children);
+					}
 				}
 			};
 			await getApis(result);
