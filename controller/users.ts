@@ -134,7 +134,7 @@ class UserController {
 
 	// 获取用户信息
 	info = async (req: Request, res: Response) => {
-		const { user_id: origin_user_id } = req.body;
+		const { user_id: origin_user_id } = req.query;
 		try {
 			let retrieveRes: any = null;
 			if (origin_user_id) {
