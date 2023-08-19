@@ -9,32 +9,38 @@ class ApisController {
 	getApiInfo = async (req: Request, res: Response) => {
 		const { api_id } = req.query;
 		try {
-			// 1. 获取该接口基本信息，并结构出project_id, dictionary_id, response_id
+			// 1. 获取该接口基本信息，并解构出project_id, dictionary_id
 			const apiInfoSource = await queryPromise('SELECT * FROM apis WHERE api_id = ? ', api_id);
-			const { project_id, dictionary_id, response_id, ...apiInfo } = apiInfoSource[0];
+			const { project_id, dictionary_id, ...apiInfo } = apiInfoSource[0];
 
 			// 2. 获取该接口的前置url
-			const projectCurrentType = (await queryPromise('SELECT project_current_type FROM projects WHERE project_id = ? ', project_id))[0];
+			const { project_current_type: projectCurrentType, ...otherInfo } = (
+				await queryPromise('SELECT * FROM projects WHERE project_id = ?', project_id)
+			)[0];
 			const baseUrl = (
 				await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ? ', [project_id, projectCurrentType])
-			)[0];
+			)[0].env_baseurl;
 
 			// 3. 获取该接口的列表形式请求参数
 			const paramsSource = await queryPromise('SELECT * FROM request_params WHERE api_id = ? ', api_id);
 			let api_request_params: any[] = [];
 			for (let i = 0; i < 5; i++) {
-				const paramsClassified = paramsSource.filter((item: any) => item.param_type === i);
-				let paramsItem = {
-					type: i,
-					params_list: paramsClassified.map((item: any) => {
-						return {
-							name: item.param_name,
-							type: item.param_type,
-							desc: item.param_desc,
-						};
-					}),
-				};
-				api_request_params.push(paramsItem);
+				const paramsClassified = paramsSource.filter((item: any) => item.param_class === i);
+				if (!paramsClassified.length) {
+					continue;
+				} else {
+					let paramsItem = {
+						type: i,
+						params_list: paramsClassified.map((item: any) => {
+							return {
+								name: item.param_name,
+								type: item.param_type,
+								desc: item.param_desc,
+							};
+						}),
+					};
+					api_request_params.push(paramsItem);
+				}
 			}
 
 			// 4. 获取该接口JSON形式的请求参数
@@ -46,7 +52,7 @@ class ApisController {
 			// 6. 最终结果组装并返回
 			const result = {
 				...apiInfo,
-				api_env_url: baseUrl,
+				baseUrl,
 				api_request_params,
 				api_request_JSON,
 				api_response,
@@ -67,19 +73,16 @@ class ApisController {
 
 	// 新增接口
 	addApi = async (req: Request, res: Response) => {
-		const { api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
+		const { ...apiInfo } = req.body;
 		try {
-			// 1. 先插入api_response，拿到response_id
-			const response_id = (await queryPromise('INSERT INTO api_responses SET ?', api_response)).insertId;
-			// 2. 插入api_info，拿到api_id
+			// 1. 插入api_info，拿到api_id
 			const api_id = (
 				await queryPromise('INSERT INTO apis SET ?', {
 					...apiInfo,
-					response_id,
 				})
 			).insertId;
 
-			// 3. 返回结果
+			// 2. 返回结果
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'add api success',
@@ -100,31 +103,41 @@ class ApisController {
 			// 1. 更新api_info
 			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo }, api_id]);
 
-			// 2. 更新api_response
+			// 2. 如果未添加过api_response则插入，否则更新
 			if (api_response) {
-				await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [api_response, api_id]);
+				const api_response_id = (await queryPromise('SELECT response_id FROM api_responses WHERE api_id = ? ', api_id))[0];
+				if (api_response_id) {
+					await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [{ ...api_response }, api_id]);
+				} else {
+					await queryPromise('INSERT INTO api_responses SET ?', { ...api_response, api_id });
+				}
 			}
 
 			// 3. 更新api_request_params
 			if (api_request_params) {
-				const paramsList: any[] = [];
+				await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
 				api_request_params.forEach((item: any) => {
-					item.params_list.forEach((param: any) => {
-						paramsList.push({
+					item.params_list.forEach(async (param: any) => {
+						const paramItem = {
 							api_id,
-							param_name: param.name,
-							param_type: item.type,
-							param_desc: param.desc,
-						});
+							param_class: item.type,
+							param_name: param.param_name,
+							param_type: param.param_type,
+							param_desc: param.param_desc,
+						};
+						await queryPromise('INSERT INTO request_params SET ?', paramItem);
 					});
 				});
-				await queryPromise('DELETE FROM request_params WHERE api_id = ?', api_id);
-				await queryPromise('INSERT INTO request_params SET ?', paramsList);
 			}
 
-			// 4. 更新api_request_JSON
+			// 4. 如果未添加过api_request_JSON则插入，否则更新
 			if (api_request_JSON) {
-				await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
+				const api_request_JSON_id = (await queryPromise('SELECT JSON_id FROM request_JSON WHERE api_id = ? ', api_id))[0];
+				if (api_request_JSON_id) {
+					await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
+				} else {
+					await queryPromise('INSERT INTO request_JSON SET ?', { JSON_body: api_request_JSON, api_id });
+				}
 			}
 
 			// 5. 返回结果
@@ -166,7 +179,7 @@ class ApisController {
 	 * 2. 然后接收传过来的参数
 	 * 3. 最后将参数解析完成之后，用axios来发送请求
 	 */
-	runApi = async (req: Request, res: Response) => {
+	runApi = async (req: Request, res: Response): Promise<void> => {
 		const { api_id, api_request_params, api_request_JSON } = req.body;
 		try {
 			// 1. 将api_id传入，获取到api的method、url等相关信息
