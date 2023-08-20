@@ -3,15 +3,17 @@ import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index'
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { AVATAR_BASE_PATH } from '../constance';
+import { AVATAR_BASE_PATH, AVATAR_SERVER_PATH } from '../constance';
 
 class UserController {
+	// 用于存储邮箱验证码的 Map
 	emailCaptchaMap: Map<string, string>;
 
 	constructor() {
 		this.emailCaptchaMap = new Map();
 	}
 
+	// 发送验证码
 	sendCaptcha = async (req: Request, res: Response) => {
 		const { email } = req.body;
 
@@ -62,6 +64,7 @@ class UserController {
 		);
 	};
 
+	// 注册
 	register = async (req: Request, res: Response) => {
 		const { email, captcha, password } = req.body;
 
@@ -96,6 +99,7 @@ class UserController {
 		}
 	};
 
+	// 登录
 	login = async (req: Request, res: Response) => {
 		const { email, password } = req.body;
 
@@ -113,30 +117,40 @@ class UserController {
 				unifiedResponseBody({ result_code: 1, result_msg: 'password 不正确', res });
 				return;
 			}
+
+			// IIFE写法，限制password的作用域
 			(() => {
 				const { password, createdAt, updatedAt, ...restUserInfo } = userInfo;
 
 				// 根据 id, email, username, introduce, avatar 生成token
 				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
 
-				unifiedResponseBody({ result_msg: '登陆成功', result: { token }, res });
+				unifiedResponseBody({ result_msg: '登录成功', result: { token }, res });
 			})();
 		} catch (error) {
-			errorHandler({ error, result_msg: '登陆失败', res });
+			errorHandler({ error, result_msg: '登录失败', res });
 		}
 	};
 
+	// 获取用户信息
 	info = async (req: Request, res: Response) => {
+		const { user_id: origin_user_id } = req.query;
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+			let retrieveRes: any = null;
+			if (origin_user_id) {
+				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', origin_user_id);
+			} else {
+				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+			}
 
-			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			const { password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
 			unifiedResponseBody({ result_msg: '获取成功', result: { userInfo }, res });
 		} catch (error) {
 			errorHandler({ error, result_msg: '获取用户信息失败', res });
 		}
 	};
 
+	// 更新用户信息
 	updateInfo = async (req: Request, res: Response) => {
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [req.body, (req as any).state.userInfo.user_id]);
@@ -149,17 +163,42 @@ class UserController {
 		}
 	};
 
+	// 上传头像
 	uploadAvatar = async (req: Request, res: Response) => {
 		if (!req.file) {
 			unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: 'No file uploaded', res });
 			return;
 		}
-		const avatarPath = `${AVATAR_BASE_PATH}/${req.file.filename}`;
+		const avatarPath = `${AVATAR_SERVER_PATH}/${req.file.filename}`;
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
 			unifiedResponseBody({ result_msg: 'File uploaded successfully', result: { avatar: avatarPath }, res });
 		} catch (error) {
 			errorHandler({ error, result_msg: 'File uploaded failed', res });
+		}
+	};
+
+	// 根据用户名搜索用户
+	searchUser = async (req: Request, res: Response) => {
+		const { username } = req.query;
+		try {
+			const usersSource = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
+
+			const retrieveRes = usersSource.map((user: any) => {
+				const { user_id, password, createdAt, updatedAt, ...userInfo } = user;
+				return userInfo;
+			});
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: '获取成功',
+				user_list: retrieveRes,
+			});
+		} catch (error) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: '获取失败' + error,
+			});
 		}
 	};
 }

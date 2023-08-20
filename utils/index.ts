@@ -1,5 +1,5 @@
 import db from '../database/index';
-import { QueryOptions, queryCallback } from 'mysql';
+import { QueryOptions } from 'mysql';
 import { Response } from 'express';
 
 export const getMissingParam = (requireParams: string[], paramsFromClient: object) => {
@@ -34,7 +34,7 @@ export const queryPromise = (options: string | QueryOptions, values?: any): Prom
 
 interface UnifiedResponseBodyParams {
 	httpStatus?: number;
-	result_code?: 0 | 1; // 0 fail, 1 success
+	result_code?: 0 | 1; // 0 success, 1 fail
 	result_msg: string;
 	result?: object;
 	res: Response;
@@ -57,7 +57,6 @@ export const unifiedResponseBody = ({ httpStatus = 200, result_code = 0, result_
 };
 
 export const errorHandler = ({ error, httpStatus = 500, result_msg, result = {}, res }: ErrorHandlerParams): void => {
-	console.error(error);
 	unifiedResponseBody({
 		httpStatus,
 		result_code: 1,
@@ -69,4 +68,17 @@ export const errorHandler = ({ error, httpStatus = 500, result_msg, result = {},
 
 export const paramsErrorHandler = (result: object, res: Response) => {
 	unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: '参数错误', result, res });
+};
+
+// 获取当前时间
+export const getPresentTime = () => {
+	const date = new Date();
+	const year = date.getFullYear();
+	const month = (date.getMonth() + 1).toString().padStart(2, '0');
+	const day = date.getDate().toString().padStart(2, '0');
+	const hour = date.getHours().toString().padStart(2, '0');
+	const minute = date.getMinutes().toString().padStart(2, '0');
+	const second = date.getSeconds().toString().padStart(2, '0');
+
+	return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
 };

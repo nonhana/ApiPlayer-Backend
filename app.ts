@@ -3,11 +3,13 @@ import express from 'express';
 import path from 'path';
 import cookieParser from 'cookie-parser';
 import logger from 'morgan';
-
-import indexRouter from './routes/index';
+import cors from 'cors';
+import teamsRouter from './routes/teams';
 import usersRouter from './routes/users';
+import projectsRouter from './routes/projects';
+import apisRouter from './routes/apis';
 
-var app = express();
+const app = express();
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -17,18 +19,22 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
+app.use(cors());
 app.use(express.static('public'));
 
-app.use('/', indexRouter);
+// 注册路由
+app.use('/teams', teamsRouter);
 app.use('/users', usersRouter);
+app.use('/projects', projectsRouter);
+app.use('/apis', apisRouter);
 
 // catch 404 and forward to error handler
-app.use(function (req, res, next) {
+app.use(function (_, __, next) {
 	next(createError(404));
 });
 
 // error handler
-app.use(function (err, req, res, next) {
+app.use(function (err, req, res, _) {
 	// set locals, only providing error in development
 	res.locals.message = err.message;
 	res.locals.error = req.app.get('env') === 'development' ? err : {};

@@ -12,6 +12,7 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 	const { headers } = req;
 	const { authorization } = headers;
 
+	// 此处直接预置了Bearer，不用加了
 	const token = (authorization as string)?.replace('Bearer ', '');
 
 	if (!token) {
@@ -19,6 +20,7 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 		return;
 	}
 
+	// 如果前端发的请求带了 token，就验证 token
 	try {
 		req.state = {};
 		req.state.userInfo = jwt.verify(token, 'apiPlayer');
