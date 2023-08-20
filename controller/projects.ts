@@ -350,48 +350,66 @@ class ProjectsController {
 	updateGlobalInfo = async (req: Request, res: Response) => {
 		const { project_id, global_params, global_variables, env_list } = req.body;
 		try {
-			// 1. 更新全局参数
-			for (let i = 0; i < global_params.length; i++) {
-				const type = global_params[i].type;
-				const params_list = global_params[i].params_list;
-				for (let j = 0; j < params_list.length; j++) {
-					const param_id = params_list[j].param_id;
-					const param_name = params_list[j].param_name;
-					const param_type = params_list[j].param_type;
-					const param_desc = params_list[j].param_desc;
-					const param_value = params_list[j].param_value;
-					if (param_id) {
-						await queryPromise('UPDATE global_params SET ? WHERE param_id = ?', [{ param_name, param_type, param_desc, param_value }, param_id]);
-					} else {
-						await queryPromise('INSERT INTO global_params SET ?', { project_id, father_type: type, param_name, param_type, param_desc, param_value });
+			// 1. 更新全局参数，根据param_action_type来判断是新增、修改还是删除
+			if (global_params) {
+				for (let i = 0; i < global_params.length; i++) {
+					const type = global_params[i].type;
+					const params_list = global_params[i].params_list;
+					for (let j = 0; j < params_list.length; j++) {
+						const param_id = params_list[j].param_id;
+						const param_name = params_list[j].param_name;
+						const param_type = params_list[j].param_type;
+						const param_desc = params_list[j].param_desc;
+						const param_value = params_list[j].param_value;
+						const param_action_type = params_list[j].param_action_type;
+						if (param_action_type === 0) {
+							await queryPromise('UPDATE global_params SET ? WHERE param_id = ?', [{ param_name, param_type, param_desc, param_value }, param_id]);
+						} else if (param_action_type === 1) {
+							await queryPromise('INSERT INTO global_params SET ?', {
+								project_id,
+								father_type: type,
+								param_name,
+								param_type,
+								param_desc,
+								param_value,
+							});
+						} else {
+							await queryPromise('DELETE FROM global_params WHERE param_id = ?', param_id);
+						}
 					}
 				}
 			}
 
-			// 2. 更新全局变量
-			await queryPromise('DELETE FROM global_variables WHERE project_id = ?', project_id);
-			for (let i = 0; i < global_variables.length; i++) {
-				const variable_id = global_variables[i].variable_id;
-				const variable_name = global_variables[i].variable_name;
-				const variable_type = global_variables[i].variable_type;
-				const variable_value = global_variables[i].variable_value;
-				const variable_desc = global_variables[i].variable_desc;
+			// 2. 更新全局变量,根据variable_action_type来判断是新增、修改还是删除
+			if (global_variables) {
+				for (let i = 0; i < global_variables.length; i++) {
+					const variable_id = global_variables[i].variable_id;
+					const variable_name = global_variables[i].variable_name;
+					const variable_type = global_variables[i].variable_type;
+					const variable_value = global_variables[i].variable_value;
+					const variable_desc = global_variables[i].variable_desc;
+					const variable_action_type = global_variables[i].variable_action_type;
 
-				if (variable_id) {
-					await queryPromise('UPDATE global_variables SET ? WHERE variable_id = ?', [
-						{ variable_name, variable_type, variable_value, variable_desc },
-						variable_id,
-					]);
-				} else {
-					await queryPromise('INSERT INTO global_variables SET ?', { project_id, variable_name, variable_type, variable_value, variable_desc });
+					if (variable_action_type === 0) {
+						await queryPromise('UPDATE global_variables SET ? WHERE variable_id = ?', [
+							{ variable_name, variable_type, variable_value, variable_desc },
+							variable_id,
+						]);
+					} else if (variable_action_type === 1) {
+						await queryPromise('INSERT INTO global_variables SET ?', { project_id, variable_name, variable_type, variable_value, variable_desc });
+					} else {
+						await queryPromise('DELETE FROM global_variables WHERE variable_id = ?', variable_id);
+					}
 				}
 			}
 
 			// 3. 更新环境列表
-			for (let i = 0; i < env_list.length; i++) {
-				const env_type = env_list[i].env_type;
-				const env_baseurl = env_list[i].env_baseurl;
-				await queryPromise('UPDATE project_env SET ? WHERE project_id = ? AND env_type = ?', [{ env_baseurl }, project_id, env_type]);
+			if (env_list) {
+				for (let i = 0; i < env_list.length; i++) {
+					const env_type = env_list[i].env_type;
+					const env_baseurl = env_list[i].env_baseurl;
+					await queryPromise('UPDATE project_env SET ? WHERE project_id = ? AND env_type = ?', [{ env_baseurl }, project_id, env_type]);
+				}
 			}
 
 			res.status(200).json({
