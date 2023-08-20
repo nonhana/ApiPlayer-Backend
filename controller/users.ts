@@ -3,7 +3,7 @@ import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index'
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { AVATAR_BASE_PATH } from '../constance';
+import { AVATAR_BASE_PATH, AVATAR_SERVER_PATH } from '../constance';
 
 class UserController {
 	// 用于存储邮箱验证码的 Map
@@ -169,7 +169,7 @@ class UserController {
 			unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: 'No file uploaded', res });
 			return;
 		}
-		const avatarPath = `${AVATAR_BASE_PATH}/${req.file.filename}`;
+		const avatarPath = `${AVATAR_SERVER_PATH}/${req.file.filename}`;
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
 			unifiedResponseBody({ result_msg: 'File uploaded successfully', result: { avatar: avatarPath }, res });

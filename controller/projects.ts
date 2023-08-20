@@ -1,30 +1,46 @@
 import { Request, Response } from 'express';
 import { queryPromise } from '../utils/index';
 import type { OkPacket } from 'mysql';
-
-interface ApiListItem {
-	id: number;
-	label: string;
-	type: 'dictionary' | 'GET' | 'POST' | 'PUT' | 'DELETE';
-	children: ApiListItem[];
-}
+import type { ApiListItem } from '../utils/types';
+import { PROJECT_ICON_BASE_PATH, PROJECT_ICON_SERVER_PATH } from '../constance';
 
 class ProjectsController {
+	// 上传项目图标。只保存，不更新数据库
+	uploadProjectIcon = async (req: Request, res: Response) => {
+		if (!req.file) {
+			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
+			return;
+		}
+		const projectIconPath = `${PROJECT_ICON_SERVER_PATH}/${req.file.filename}`;
+		try {
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'File uploaded successfully',
+				project_icon_path: projectIconPath,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
 	// 新建项目
 	addProject = async (req: Request, res: Response) => {
 		const { user_id, ...projectInfo } = req.body;
 		try {
 			// 1. 先插入项目信息，获取到新的项目信息
-			const sql = `INSERT INTO projects (team_id, project_name, project_img, project_desc) VALUES ('${projectInfo.team_id}', '${projectInfo.project_name}', '${projectInfo.project_img}', '${projectInfo.project_desc}')`;
-			const projectResult: OkPacket = await queryPromise(sql);
+			const sql = 'INSERT INTO projects SET ?';
+			const projectResult: OkPacket = await queryPromise(sql, projectInfo);
 
 			// 2. 再插入项目成员信息
-			const sql2 = `INSERT INTO projects_users (user_id, project_id, project_user_identity) VALUES (${user_id}, ${projectResult.insertId}, 0)`;
-			await queryPromise(sql2);
+			const sql2 = 'INSERT INTO projects_users SET ?';
+			await queryPromise(sql2, { user_id, project_id: projectResult.insertId, project_user_identity: 0 });
 
 			// 3. 新建这个项目的接口根目录
-			const sql3 = `INSERT INTO dictionaries (project_id, dictionary_name) VALUES (${projectResult.insertId}, '根目录')`;
-			await queryPromise(sql3);
+			const sql3 = 'INSERT INTO dictionaries SET ?';
+			await queryPromise(sql3, { project_id: projectResult.insertId, dictionary_name: '根目录' });
 
 			// 4. 预置这个项目的环境：0~3：开发环境、测试环境、正式环境、mock.js环境
 			for (let i = 0; i < 4; i++) {
@@ -48,16 +64,16 @@ class ProjectsController {
 		const { user_id, project_id } = req.body;
 		try {
 			// 先查询是否存在
-			const sql = `SELECT * FROM recently_visited WHERE user_id = ${user_id} AND project_id = ${project_id}`;
-			const result = await queryPromise(sql);
+			const sql = 'SELECT * FROM recently_visited WHERE user_id = ? AND project_id = ?';
+			const result = await queryPromise(sql, [user_id, project_id]);
 			if (result.length) {
 				// 如果存在，更新访问时间
-				const sql2 = `UPDATE recently_visited SET last_access_time = NOW() WHERE user_id = ${user_id} AND project_id = ${project_id}`;
-				await queryPromise(sql2);
+				const sql2 = 'UPDATE recently_visited SET last_access_time = NOW() WHERE user_id = ? AND project_id = ?';
+				await queryPromise(sql2, [user_id, project_id]);
 			} else {
 				// 如果不存在，插入记录
-				const sql2 = `INSERT INTO recently_visited (user_id, project_id, last_access_time) VALUES (${user_id}, ${project_id}, NOW())`;
-				await queryPromise(sql2);
+				const sql2 = 'INSERT INTO recently_visited (user_id, project_id) VALUES (?, ?)';
+				await queryPromise(sql2, [user_id, project_id]);
 			}
 			res.status(200).json({
 				result_code: 0,
@@ -75,14 +91,20 @@ class ProjectsController {
 	getRecentlyVisited = async (req: Request, res: Response) => {
 		const { user_id } = req.query;
 		try {
-			const sql = `SELECT * FROM recently_visited WHERE user_id = ${user_id} ORDER BY last_access_time DESC LIMIT 10`;
-			const projectIdList = await queryPromise(sql);
+			const sql = 'SELECT * FROM recently_visited WHERE user_id = ? ORDER BY last_access_time DESC LIMIT 10';
+			const projectIdList = await queryPromise(sql, user_id);
 
 			const result = await Promise.all(
 				projectIdList.map(async (item: any) => {
-					const sql = `SELECT project_name,project_img,project_desc FROM projects WHERE project_id = ${item.project_id}`;
-					const project = await queryPromise(sql);
-					return project[0];
+					const sql1 = 'SELECT project_name,project_img,project_desc FROM projects WHERE project_id = ?';
+					const project = await queryPromise(sql1, item.project_id);
+
+					const sql2 = 'SELECT last_access_time FROM recently_visited WHERE user_id = ? AND project_id = ?';
+					const last_access_time = await queryPromise(sql2, [user_id, item.project_id]);
+					return {
+						...project[0],
+						last_access_time: last_access_time[0].last_access_time,
+					};
 				})
 			);
 

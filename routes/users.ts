@@ -10,7 +10,7 @@ const router = express.Router();
 
 const storage = multer.diskStorage({
 	destination(_, __, cb) {
-		cb(null, 'public/images');
+		cb(null, 'public/uploads/images/avatars');
 	},
 	filename(_, file, cb) {
 		cb(null, `${Date.now()}_${Math.floor(Math.random() * 1e9)}${path.extname(file.originalname)}`);

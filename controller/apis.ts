@@ -46,8 +46,17 @@ class ApisController {
 			// 4. 获取该接口JSON形式的请求参数
 			const api_request_JSON = (await queryPromise('SELECT JSON_body FROM request_JSON WHERE api_id = ? ', api_id))[0];
 
-			// 5. 获取该接口的响应参数
-			const { response_id: api_response_id, ...api_response } = (await queryPromise('SELECT * FROM api_responses WHERE api_id = ? ', api_id))[0];
+			// 5. 获取该接口的返回响应列表，可能有多个
+			const apiResponsesSource = await queryPromise('SELECT * FROM api_responses WHERE api_id = ? ', api_id);
+
+			const api_responses = apiResponsesSource.map((item: any) => {
+				return {
+					response_id: item.response_id,
+					response_name: item.response_name,
+					response_desc: item.response_desc,
+					response_body: item.response_body,
+				};
+			});
 
 			// 6. 最终结果组装并返回
 			const result = {
@@ -55,7 +64,7 @@ class ApisController {
 				baseUrl,
 				api_request_params,
 				api_request_JSON,
-				api_response,
+				api_responses,
 			};
 
 			res.status(200).json({
@@ -98,19 +107,20 @@ class ApisController {
 
 	// 更新接口
 	updateApi = async (req: Request, res: Response) => {
-		const { api_id, api_request_params, api_request_JSON, api_response, ...apiInfo } = req.body;
+		const { api_id, api_request_params, api_request_JSON, api_responses, ...apiInfo } = req.body;
 		try {
 			// 1. 更新api_info
 			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo }, api_id]);
 
-			// 2. 如果未添加过api_response则插入，否则更新
-			if (api_response) {
-				const api_response_id = (await queryPromise('SELECT response_id FROM api_responses WHERE api_id = ? ', api_id))[0];
-				if (api_response_id) {
-					await queryPromise('UPDATE api_responses SET ? WHERE api_id = ?', [{ ...api_response }, api_id]);
-				} else {
-					await queryPromise('INSERT INTO api_responses SET ?', { ...api_response, api_id });
-				}
+			// 2. 如果传入的api_responses列表item的response_id存在，则更新，否则新增
+			if (api_responses) {
+				api_responses.forEach(async (item: any) => {
+					if (item.response_id) {
+						await queryPromise('UPDATE api_responses SET ? WHERE response_id = ?', [{ ...item }, item.response_id]);
+					} else {
+						await queryPromise('INSERT INTO api_responses SET ?', { ...item, api_id });
+					}
+				});
 			}
 
 			// 3. 更新api_request_params

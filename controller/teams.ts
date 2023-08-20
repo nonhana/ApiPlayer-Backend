@@ -31,26 +31,30 @@ class TeamController {
 
 	// 获取某单个团队的详细信息
 	getTeamInfo = async (req: Request, res: Response) => {
-		const { team_id, user_id } = req.query;
+		const { team_id } = req.query;
 		try {
-			const [memberList, projectList, teamInfoSource, userTeamName] = await Promise.all([
-				queryPromise(`SELECT user_id, username, avatar FROM users WHERE user_id IN (SELECT user_id FROM team_members WHERE team_id = ${team_id})`),
-				queryPromise(`SELECT project_id, project_name, project_img FROM projects WHERE team_id = ${team_id}`),
-				queryPromise(`SELECT team_id, team_name, team_desc FROM teams WHERE team_id = ${team_id}`),
-				queryPromise(`SELECT team_user_name FROM team_members WHERE team_id = ${team_id} AND user_id = ${user_id}`),
+			const [memberList, projectList, teamInfoSource] = await Promise.all([
+				queryPromise(
+					'SELECT u.user_id, u.username, u.avatar, u.email, m.team_user_name, m.team_user_identity FROM users u INNER JOIN team_members m ON u.user_id = m.user_id WHERE m.team_id = ?',
+					team_id
+				),
+				queryPromise('SELECT project_id, project_name, project_img FROM projects WHERE team_id = ?', team_id),
+				queryPromise('SELECT team_id, team_name, team_desc FROM teams WHERE team_id = ?', team_id),
 			]);
 
 			const memberListFormatted = memberList.map((item: any) => ({
 				user_id: item.user_id,
 				user_name: item.username,
-				user_avatar: item.avatar,
+				user_team_name: item.team_user_name ?? item.username,
+				user_img: item.avatar,
+				user_email: item.email,
+				user_identity: item.team_user_identity,
 			}));
 
 			const teamInfo = {
 				team_id: teamInfoSource[0].team_id,
 				team_name: teamInfoSource[0].team_name,
 				team_desc: teamInfoSource[0].team_desc,
-				team_user_name: userTeamName[0].team_user_name,
 			};
 
 			res.status(200).json({
