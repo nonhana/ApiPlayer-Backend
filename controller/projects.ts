@@ -320,6 +320,7 @@ class ProjectsController {
 			const variablesSource = await queryPromise('SELECT * FROM global_variables WHERE project_id = ?', project_id);
 			const global_variables = variablesSource.map((variable: any) => {
 				return {
+					variable_id: variable.variable_id,
 					variable_name: variable.variable_name,
 					variable_type: variable.variable_type,
 					variable_value: variable.variable_value,
