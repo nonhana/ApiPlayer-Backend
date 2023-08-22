@@ -3,6 +3,7 @@ import { auth } from '../middleware/user.middleware';
 import { projectsController } from '../controller/projects';
 import multer from 'multer';
 import path from 'path';
+import cors from 'cors';
 
 const router = express.Router();
 
@@ -72,5 +73,8 @@ router.post('/updateglobalinfo', auth, projectsController.updateGlobalInfo);
 
 // 删除项目
 router.post('/deleteproject', auth, projectsController.deleteProject);
+
+// mock
+router.post('/mock', cors(), projectsController.mock);
 
 export default router;

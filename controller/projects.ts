@@ -3,6 +3,7 @@ import { queryPromise } from '../utils/index';
 import type { OkPacket } from 'mysql';
 import type { ApiListItem } from '../utils/types';
 import { PROJECT_ICON_BASE_PATH, PROJECT_ICON_SERVER_PATH } from '../constance';
+import { JSONSchemaFaker } from 'json-schema-faker';
 
 class ProjectsController {
 	// 上传项目图标。只保存，不更新数据库
@@ -442,6 +443,14 @@ class ProjectsController {
 				result_msg: error.message || 'An error occurred',
 			});
 		}
+	};
+
+	mock = async (req: Request, res: Response) => {
+		const schema = req.body;
+
+		const mockedData = await JSONSchemaFaker.resolve(schema);
+
+		res.status(200).json(mockedData);
 	};
 }
 

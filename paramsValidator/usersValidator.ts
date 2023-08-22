@@ -17,10 +17,17 @@ export const usersValidator = {
 		body('password').isString().notEmpty(),
 	],
 	['login']: [body('email').isEmail(), body('password').isString().notEmpty()],
-	['update-info']: [
-		body('email').isEmail().optional(),
-		body('username').isString().optional(),
-		body('introduce').isString().optional(),
-		body().custom(atLeastOneParamExists),
+	['update-info']: [body('username').isString().optional(), body('introduce').isString().optional(), body().custom(atLeastOneParamExists)],
+	['change-password']: [
+		body('captcha')
+			.isString()
+			.matches(/^\d{6}$/),
+		body('newPassword').isString().notEmpty(),
+	],
+	['change-email']: [
+		body('captcha')
+			.isString()
+			.matches(/^\d{6}$/),
+		body('newEmail').isEmail(),
 	],
 };
