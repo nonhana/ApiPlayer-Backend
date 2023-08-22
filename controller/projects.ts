@@ -2,7 +2,27 @@ import { Request, Response } from 'express';
 import { queryPromise } from '../utils/index';
 import type { OkPacket } from 'mysql';
 import type { ApiListItem } from '../utils/types';
+import * as fs from 'fs';
+import * as yaml from 'js-yaml';
 import { PROJECT_ICON_BASE_PATH, PROJECT_ICON_SERVER_PATH } from '../constance';
+
+interface ApiRequestParam {
+	/**
+	 * 0-Params，1-Body(form-data)，2-Body(x-www-form-unlencoded)，3-Cookie，4-Header
+	 */
+	type: number;
+	params_list?: ParamsList[];
+}
+interface ParamsList {
+	param_desc: string;
+	param_name: string;
+	param_type: number;
+}
+interface ApiResponse {
+	http_status: number;
+	response_body: string;
+	response_name: string;
+}
 
 class ProjectsController {
 	// 上传项目图标。只保存，不更新数据库
@@ -436,6 +456,208 @@ class ProjectsController {
 				result_code: 0,
 				result_msg: 'delete project success',
 				project_id,
+			});
+		} catch (error: any) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		}
+	};
+
+	// 接收前端传来的Swagger文档(yaml格式)，将其转为JSON格式后解析之后，新建接口。
+	uploadYaml = async (req: Request, res: Response) => {
+		if (!req.file) {
+			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
+			return;
+		}
+		const { project_id, dictionary_id } = req.body;
+		const yamlPath = `public/uploads/files/yamls/${req.file.filename}`;
+		try {
+			const yamlContent = fs.readFileSync(yamlPath, 'utf8');
+			const jsonData: any = yaml.load(yamlContent);
+
+			// 将jsonData进行解析
+			// 1. 将definitions中的内容解析并暂存，便于后续替换$ref中的内容
+			const definitions: any = {};
+			if (jsonData.definitions) {
+				for (let key in jsonData.definitions) {
+					definitions[key] = jsonData.definitions[key];
+				}
+			}
+			// 2. 定义替换$ref的函数，将$ref中的内容替换成definitions中的内容。
+			// 由于definitions中的内容可能也有$ref，所以需要递归替换。
+			// 如果不包含$ref，则直接返回。
+			const replaceRef = (obj: any) => {
+				if (obj.$ref) {
+					const ref = obj.$ref.split('/');
+					const refName = ref[ref.length - 1];
+					obj = definitions[refName];
+					replaceRef(obj);
+				} else {
+					for (let key in obj) {
+						if (typeof obj[key] === 'object') {
+							replaceRef(obj[key]);
+						}
+					}
+				}
+				return obj;
+			};
+			// 3. 遍历paths，提取出api_info，api_request_params，api_request_JSON，api_responses
+			let api_id_list: number[] = [];
+			let api_info_list: any[] = [];
+			let api_request_params_list: any[] = [];
+			let api_request_JSON_list: any[] = [];
+			let api_responses_list: any[] = [];
+			const paths = jsonData.paths;
+			for (let path in paths) {
+				let api_info = {
+					project_id: Number(project_id),
+					dictionary_id: Number(dictionary_id),
+					api_name: '',
+					api_url: '',
+					api_method: '',
+					api_desc: '',
+					api_editor_id: 0,
+					api_creator_id: 0,
+				};
+				let api_request_params: ApiRequestParam[] = [];
+				let api_request_JSON: string = '';
+				let api_responses: ApiResponse[] = [];
+				// 2.1 处理api_info
+				api_info.api_method = Object.keys(paths[path])[0].toUpperCase();
+				api_info.api_name = paths[path][Object.keys(paths[path])[0]].summary;
+				api_info.api_url = path;
+				api_info.api_desc = paths[path][Object.keys(paths[path])[0]].description;
+				api_info.api_editor_id = (req as any).state.userInfo.user_id;
+				api_info.api_creator_id = (req as any).state.userInfo.user_id;
+				// 2.2 处理api_request_params
+				const parameters = paths[path][Object.keys(paths[path])[0]].parameters;
+				console.log('parameters', parameters);
+				if (parameters) {
+					for (let i = 0; i < parameters.length; i++) {
+						/**
+						 * 0-Params，1-Body(form-data)，2-Body(x-www-form-unlencoded)，3-Cookie，4-Header
+						 */
+						let typeNum: number = 0;
+						if (api_info.api_method === 'GET') {
+							switch (parameters[i].in) {
+								case 'query':
+									typeNum = 0;
+									break;
+								case 'header':
+									typeNum = 4;
+									break;
+								case 'cookie':
+									typeNum = 3;
+									break;
+								default:
+									break;
+							}
+						} else if (api_info.api_method === 'POST') {
+							switch (parameters[i].in) {
+								case 'formData':
+									typeNum = 1;
+									break;
+								case 'query':
+									typeNum = 2;
+									break;
+								case 'cookie':
+									typeNum = 3;
+									break;
+								case 'header':
+									typeNum = 4;
+									break;
+								default:
+									break;
+							}
+						}
+						// 如果api_request_params中不存在这个type，则新建；如果存在，则push
+						const index = api_request_params.findIndex((item: ApiRequestParam) => item.type === typeNum);
+						if (index === -1) {
+							api_request_params.push({
+								type: typeNum,
+								params_list: [
+									{
+										param_desc: parameters[i].description,
+										param_name: parameters[i].name,
+										param_type: parameters[i].type === 'number' ? 0 : parameters[i].type === 'integer' ? 1 : parameters[i].type === 'string' ? 2 : 3,
+									},
+								],
+							});
+						} else {
+							api_request_params[index].params_list!.push({
+								param_desc: parameters[i].description,
+								param_name: parameters[i].name,
+								param_type: parameters[i].type === 'number' ? 0 : parameters[i].type === 'integer' ? 1 : parameters[i].type === 'string' ? 2 : 3,
+							});
+						}
+					}
+					// 2.3 处理api_request_JSON
+					// 如果传过来的参数in有body(json格式)，则将其JSON_Schema存入api_request_JSON
+					const body = parameters.find((item: any) => item.in === 'body');
+					if (body) {
+						// 把body中的$ref替换成definitions中的内容。
+						api_request_JSON = JSON.stringify(replaceRef(body.schema));
+					}
+				}
+				// 2.4 处理api_responses
+				const responses = paths[path][Object.keys(paths[path])[0]].responses;
+				for (let key in responses) {
+					api_responses.push({
+						http_status: key === 'default' ? 0 : Number(key),
+						// 把body中的$ref替换成definitions中的内容。
+						response_body: JSON.stringify(replaceRef(responses[key].schema)),
+						response_name: responses[key].description,
+					});
+				}
+				// 2.5 处理完成后，将数据保存到数据库中
+				const api_id = (
+					await queryPromise('INSERT INTO apis SET ?', {
+						...api_info,
+					})
+				).insertId;
+
+				if (api_responses) {
+					api_responses.forEach(async (item: any) => {
+						await queryPromise('INSERT INTO api_responses SET ?', { ...item, api_id });
+					});
+				}
+
+				if (api_request_params) {
+					api_request_params.forEach((item: any) => {
+						item.params_list.forEach(async (param: any) => {
+							const paramItem = {
+								api_id,
+								param_class: item.type,
+								param_name: param.param_name,
+								param_type: param.param_type,
+								param_desc: param.param_desc,
+							};
+							await queryPromise('INSERT INTO request_params SET ?', paramItem);
+						});
+					});
+				}
+
+				if (api_request_JSON !== '') {
+					await queryPromise('INSERT INTO request_JSON SET ?', { JSON_body: api_request_JSON, api_id });
+				}
+
+				api_id_list.push(api_id);
+				api_info_list.push(api_info);
+				api_request_params_list.push(api_request_params);
+				api_request_JSON_list.push(api_request_JSON);
+				api_responses_list.push(api_responses);
+			}
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'Change yaml to json successfully',
+				api_id_list,
+				api_info_list,
+				api_request_params_list,
+				api_request_JSON_list,
+				api_responses_list,
 			});
 		} catch (error: any) {
 			res.status(500).json({
