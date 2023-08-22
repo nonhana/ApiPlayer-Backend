@@ -20,7 +20,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(cors());
-app.use(express.static('public'));
+app.use(express.static('public')); // 静态资源托管到public目录
 
 // 注册路由
 app.use('/teams', teamsRouter);
