@@ -3,6 +3,7 @@ import { auth } from '../middleware/user.middleware';
 import { projectsController } from '../controller/projects';
 import multer from 'multer';
 import path from 'path';
+import cors from 'cors';
 
 const router = express.Router();
 
@@ -95,5 +96,8 @@ router.post('/deleteproject', auth, projectsController.deleteProject);
 
 // 接收前端传来的yaml文件，并将其转为json格式返回
 router.post('/importswagger', auth, yamlUpload.single('yamlFile'), projectsController.uploadYaml);
+
+// mock
+router.post('/mock', cors(), projectsController.mock);
 
 export default router;

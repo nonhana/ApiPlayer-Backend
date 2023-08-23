@@ -24,7 +24,7 @@ class UserController {
 
 		setTimeout(() => {
 			this.emailCaptchaMap.delete(email);
-		}, 1000 * 60 * 3);
+		}, 1000 * 60 * 5);
 
 		// 设置 Nodemailer 配置
 		const transporter = nodemailer.createTransport({
@@ -42,7 +42,7 @@ class UserController {
 			from: 'api_player@163.com', // 发件人
 			to: email, // 收件人，通过请求获取的用户邮箱地址
 			subject: 'ApiPlayer验证码', // 邮件主题
-			text: `ApiPlayer，您的验证码是：${verificationCode}，三分钟内有效。`, // 邮件内容
+			text: `ApiPlayer，您的验证码是：${verificationCode}，五分钟内有效。`, // 邮件内容
 		};
 
 		// 发送电子邮件
@@ -199,6 +199,73 @@ class UserController {
 				result_code: 1,
 				result_msg: '获取失败' + error,
 			});
+		}
+	};
+
+	// 修改密码
+	changePassword = async (req: Request, res: Response) => {
+		const { captcha, newPassword } = req.body;
+
+		const { email, user_id } = (req as any).state.userInfo;
+
+		const emailVerificationCode = this.emailCaptchaMap.get(email);
+
+		if (captcha !== emailVerificationCode) {
+			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
+			return;
+		}
+
+		try {
+			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE user_id='${user_id}'`);
+
+			const userInfo = retrieveRes[0];
+			const compareRes = bcrypt.compareSync(newPassword, userInfo.password);
+			if (compareRes) {
+				unifiedResponseBody({ result_code: 1, result_msg: '新密码不能与原始密码相同', res });
+				return;
+			}
+		} catch (error) {
+			errorHandler({ error, result_msg: '修改失败', res });
+			return;
+		}
+
+		// 加密
+		const salt = bcrypt.genSaltSync(10);
+		const passwordEncrypted = bcrypt.hashSync(newPassword, salt);
+
+		try {
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ password: passwordEncrypted }, user_id]);
+			unifiedResponseBody({ result_msg: '修改成功', res });
+		} catch (error) {
+			errorHandler({ error, result_msg: '修改失败', res });
+		}
+	};
+
+	// 修改 email
+	changeEmail = async (req: Request, res: Response) => {
+		const { newEmail, captcha } = req.body;
+
+		const OriginEmail = (req as any).state.userInfo.email;
+
+		const { user_id } = (req as any).state.userInfo;
+
+		if (newEmail === OriginEmail) {
+			unifiedResponseBody({ result_code: 1, result_msg: '新 email 不能和原 email 相同', res });
+			return;
+		}
+
+		const emailVerificationCode = this.emailCaptchaMap.get(newEmail);
+
+		if (captcha !== emailVerificationCode) {
+			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
+			return;
+		}
+
+		try {
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ email: newEmail }, user_id]);
+			unifiedResponseBody({ result_msg: '修改成功', res });
+		} catch (error) {
+			errorHandler({ error, result_msg: '修改失败', res });
 		}
 	};
 }
