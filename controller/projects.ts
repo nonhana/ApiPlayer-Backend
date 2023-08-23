@@ -5,6 +5,7 @@ import type { ApiListItem } from '../utils/types';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { PROJECT_ICON_BASE_PATH, PROJECT_ICON_SERVER_PATH } from '../constance';
+import { JSONSchemaFaker } from 'json-schema-faker';
 
 interface ApiRequestParam {
 	/**
@@ -665,6 +666,15 @@ class ProjectsController {
 				result_msg: error.message || 'An error occurred',
 			});
 		}
+	};
+
+	// mock接口，接收JSON Schema，返回mock数据
+	mock = async (req: Request, res: Response) => {
+		const schema = req.body;
+
+		const mockedData = await JSONSchemaFaker.resolve(schema);
+
+		res.status(200).json(mockedData);
 	};
 }
 

@@ -3,7 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"scripts": {
-		"start": "nodemon ./dist/bin/server.js",
+		"start": "npx nodemon ./dist/bin/server.js",
 		"copy-static": "ts-node copyStatic.ts",
 		"ts-build": "tsc",
 		"build": "npm run ts-build && npm run copy-static"
@@ -19,6 +19,7 @@
 		"http-errors": "~1.6.3",
 		"jade": "~1.11.0",
 		"js-yaml": "^4.1.0",
+		"json-schema-faker": "^0.5.3",
 		"jsonwebtoken": "^9.0.1",
 		"morgan": "~1.9.1",
 		"multer": "^1.4.5-lts.1",
@@ -34,6 +35,7 @@
 		"@types/http-errors": "^2.0.1",
 		"@types/js-yaml": "^4.0.5",
 		"@types/jsonwebtoken": "^9.0.2",
+		"@types/mockjs": "^1.0.7",
 		"@types/morgan": "^1.9.4",
 		"@types/multer": "^1.4.7",
 		"@types/mysql": "^2.15.21",

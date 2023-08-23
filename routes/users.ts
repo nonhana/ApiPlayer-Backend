@@ -57,4 +57,21 @@ router.post('/upload-avatar', auth, upload.single('avatar'), userController.uplo
 // 根据用户名搜索用户
 router.get('/searchuser', auth, userController.searchUser);
 
+// 修改密码发验证码
+router.post(
+	'/send-captcha-when-change-password',
+	auth,
+	(req, res, next) => {
+		req.body.email = (req as any).state.userInfo.email;
+		next();
+	},
+	userController.sendCaptcha
+);
+
+// 修改密码
+router.post('/change-password', auth, usersValidator['change-password'], paramsHandler, userController.changePassword);
+
+// 修改email
+router.post('/change-email', auth, usersValidator['change-email'], paramsHandler, userController.changeEmail);
+
 export default router;
