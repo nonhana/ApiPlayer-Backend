@@ -668,6 +668,7 @@ class ProjectsController {
 		}
 	};
 
+	// mock接口，接收JSON Schema，返回mock数据
 	mock = async (req: Request, res: Response) => {
 		const schema = req.body;
 
