@@ -117,7 +117,7 @@ class ProjectsController {
 
 			const result = await Promise.all(
 				projectIdList.map(async (item: any) => {
-					const sql1 = 'SELECT project_name,project_img,project_desc FROM projects WHERE project_id = ?';
+					const sql1 = 'SELECT project_id,project_name,project_img,project_desc FROM projects WHERE project_id = ?';
 					const project = await queryPromise(sql1, item.project_id);
 
 					const sql2 = 'SELECT last_access_time FROM recently_visited WHERE user_id = ? AND project_id = ?';

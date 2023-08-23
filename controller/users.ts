@@ -69,7 +69,7 @@ class UserController {
 		const { email, captcha, password } = req.body;
 
 		try {
-			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE email='${email}'`);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length > 0) {
 				unifiedResponseBody({ result_code: 1, result_msg: '该 email 已存在', res });
@@ -104,7 +104,7 @@ class UserController {
 		const { email, password } = req.body;
 
 		try {
-			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE email='${email}'`);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length === 0) {
 				unifiedResponseBody({ result_code: 1, result_msg: '该 email 不存在', res });
@@ -182,10 +182,10 @@ class UserController {
 	searchUser = async (req: Request, res: Response) => {
 		const { username } = req.query;
 		try {
-			const usersSource = await queryPromise(`SELECT * FROM users WHERE username LIKE '%${username}%'`);
+			const usersSource = await queryPromise('SELECT user_id, username, avatar, email, introduce FROM users WHERE username LIKE ?', `%${username}%`);
 
 			const retrieveRes = usersSource.map((user: any) => {
-				const { user_id, password, createdAt, updatedAt, ...userInfo } = user;
+				const { password, createdAt, updatedAt, ...userInfo } = user;
 				return userInfo;
 			});
 
@@ -216,7 +216,7 @@ class UserController {
 		}
 
 		try {
-			const retrieveRes = await queryPromise(`SELECT * FROM users WHERE user_id='${user_id}'`);
+			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', user_id);
 
 			const userInfo = retrieveRes[0];
 			const compareRes = bcrypt.compareSync(newPassword, userInfo.password);
