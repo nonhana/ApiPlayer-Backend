@@ -32,7 +32,7 @@ class ProjectsController {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
 		}
-		const projectIconPath = `${PROJECT_ICON_SERVER_PATH}/${req.file.filename}`;
+		const projectIconPath = `${PROJECT_ICON_BASE_PATH}/${req.file.filename}`;
 		try {
 			res.status(200).json({
 				result_code: 0,
@@ -49,15 +49,24 @@ class ProjectsController {
 
 	// 新建项目
 	addProject = async (req: Request, res: Response) => {
-		const { user_id, ...projectInfo } = req.body;
+		const { user_id, team_id, ...projectInfo } = req.body;
 		try {
 			// 1. 先插入项目信息，获取到新的项目信息
 			const sql = 'INSERT INTO projects SET ?';
-			const projectResult: OkPacket = await queryPromise(sql, projectInfo);
+			const projectResult: OkPacket = await queryPromise(sql, { ...projectInfo, team_id });
 
-			// 2. 再插入项目成员信息
-			const sql2 = 'INSERT INTO projects_users SET ?';
-			await queryPromise(sql2, { user_id, project_id: projectResult.insertId, project_user_identity: 0 });
+			// 2. 再插入项目成员信息，将这个队伍里面的所有成员都加入到这个项目的成员列表里面
+			const sql2 = 'SELECT user_id FROM team_members WHERE team_id = ?';
+			const userList = await queryPromise(sql2, team_id);
+			if (userList.length > 0) {
+				userList.forEach(async (item: any) => {
+					await queryPromise('INSERT INTO projects_users SET ?', {
+						user_id: item.user_id,
+						project_id: projectResult.insertId,
+						project_user_identity: 3,
+					});
+				});
+			}
 
 			// 3. 新建这个项目的接口根目录
 			const sql3 = 'INSERT INTO dictionaries SET ?';

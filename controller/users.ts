@@ -3,6 +3,7 @@ import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index'
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { OkPacket } from 'mysql';
 import { AVATAR_BASE_PATH, AVATAR_SERVER_PATH } from '../constance';
 
 class UserController {
@@ -92,7 +93,17 @@ class UserController {
 		const passwordEncrypted = bcrypt.hashSync(password, salt);
 
 		try {
-			await queryPromise('INSERT INTO users SET ?', { email, password: passwordEncrypted });
+			// 注册的时候拿到 new_user_id和username
+			const { insertId: new_user_id } = await queryPromise('INSERT INTO users (email, password) VALUES (?, ?)', [email, passwordEncrypted]);
+			const { username } = await queryPromise('SELECT username FROM users WHERE user_id = ?', new_user_id);
+			const { insertId: new_team_id } = await queryPromise('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', ['PersonalTeam', '个人团队']);
+			await queryPromise('INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (?, ?, ?, ?)', [
+				new_user_id,
+				new_team_id,
+				username,
+				0,
+			]);
+
 			unifiedResponseBody({ result_msg: '注册成功', res });
 		} catch (error) {
 			errorHandler({ error, result_msg: '注册失败', res });

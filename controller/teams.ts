@@ -126,7 +126,7 @@ class TeamController {
 	deleteTeam = async (req: Request, res: Response) => {
 		const { team_id } = req.body;
 		try {
-			await queryPromise('DELETE FROM projects WHERE team_id = ?', team_id);
+			await queryPromise('DELETE FROM teams WHERE team_id = ?', team_id);
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'delete team success',
@@ -143,7 +143,9 @@ class TeamController {
 	updateTeam = async (req: Request, res: Response) => {
 		const { team_id, user_id, team_user_name, ...teamInfo } = req.body;
 		try {
-			await queryPromise('UPDATE teams SET ? WHERE team_id = ?', [{ ...teamInfo }, team_id]);
+			if (Object.keys(teamInfo).length > 0) {
+				await queryPromise('UPDATE teams SET ? WHERE team_id = ?', [teamInfo, team_id]);
+			}
 			if (team_user_name) {
 				await queryPromise('UPDATE team_members SET team_user_name = ? WHERE team_id = ? AND user_id = ?', [team_user_name, team_id, user_id]);
 			}
@@ -197,16 +199,17 @@ class TeamController {
 
 	// 设置成员权限
 	setMemberIdentity = async (req: Request, res: Response) => {
-		const { team_id, user_id, team_user_identity, team_user_name, team_project_indentity_list } = req.body;
+		const { team_id, user_id, team_project_indentity_list, ...teamInfo } = req.body;
 		try {
-			await queryPromise('UPDATE team_members SET team_user_identity = ?, team_user_name = ? WHERE team_id = ? AND user_id = ?', [
-				team_user_identity,
-				team_user_name,
+			await queryPromise('UPDATE team_members SET ? WHERE team_id = ? AND user_id = ?', [
+				{
+					...teamInfo,
+				},
 				team_id,
 				user_id,
 			]);
 
-			if (team_project_indentity_list.length > 0) {
+			if (team_project_indentity_list && team_project_indentity_list.length > 0) {
 				team_project_indentity_list.forEach(async (item: any) => {
 					const { project_id, project_user_identity } = item;
 					await queryPromise('UPDATE projects_users SET project_user_identity = ? WHERE project_id = ? AND user_id = ?', [

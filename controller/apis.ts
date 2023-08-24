@@ -52,9 +52,9 @@ class ApisController {
 			const api_responses = apiResponsesSource.map((item: any) => {
 				return {
 					response_id: item.response_id,
+					http_status: item.http_status,
 					response_name: item.response_name,
-					response_desc: item.response_desc,
-					response_body: item.response_body,
+					response_body: JSON.parse(item.response_body),
 				};
 			});
 
@@ -112,14 +112,16 @@ class ApisController {
 			// 1. 更新api_info
 			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo }, api_id]);
 
-			// 2. 如果传入的api_responses列表item的response_id存在，则更新，否则新增
+			// 2. 如果传来api_responses，先把所有的api_responses都删除，然后再插入
 			if (api_responses) {
+				await queryPromise('DELETE FROM api_responses WHERE api_id = ?', api_id);
 				api_responses.forEach(async (item: any) => {
-					if (item.response_id) {
-						await queryPromise('UPDATE api_responses SET ? WHERE response_id = ?', [{ ...item }, item.response_id]);
-					} else {
-						await queryPromise('INSERT INTO api_responses SET ?', { ...item, api_id });
-					}
+					await queryPromise('INSERT INTO api_responses SET ?', {
+						api_id,
+						http_status: item.http_status,
+						response_name: item.response_name,
+						response_body: item.response_body,
+					});
 				});
 			}
 
@@ -140,14 +142,12 @@ class ApisController {
 				});
 			}
 
-			// 4. 如果未添加过api_request_JSON则插入，否则更新
+			// 4. 把所有的api_request_JSON都删除，然后再插入
 			if (api_request_JSON) {
-				const api_request_JSON_id = (await queryPromise('SELECT JSON_id FROM request_JSON WHERE api_id = ? ', api_id))[0];
-				if (api_request_JSON_id) {
-					await queryPromise('UPDATE request_JSON SET ? WHERE api_id = ?', [{ JSON_body: api_request_JSON }, api_id]);
-				} else {
-					await queryPromise('INSERT INTO request_JSON SET ?', { JSON_body: api_request_JSON, api_id });
-				}
+				await queryPromise('DELETE FROM request_JSON WHERE api_id = ?', api_id);
+				await queryPromise('INSERT INTO request_JSON SET ?', {
+					JSON_body: api_request_JSON,
+				});
 			}
 
 			// 5. 返回结果
