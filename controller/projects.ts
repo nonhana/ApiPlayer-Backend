@@ -32,7 +32,7 @@ class ProjectsController {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
 		}
-		const projectIconPath = `${PROJECT_ICON_BASE_PATH}/${req.file.filename}`;
+		const projectIconPath = `${PROJECT_ICON_SERVER_PATH}/${req.file.filename}`;
 		try {
 			res.status(200).json({
 				result_code: 0,
