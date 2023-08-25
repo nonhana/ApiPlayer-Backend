@@ -26,21 +26,22 @@ class ApisController {
 			let api_request_params: any[] = [];
 			for (let i = 0; i < 5; i++) {
 				const paramsClassified = paramsSource.filter((item: any) => item.param_class === i);
+				let paramsItem = {};
 				if (!paramsClassified.length) {
 					continue;
 				} else {
-					let paramsItem = {
+					paramsItem = {
 						type: i,
 						params_list: paramsClassified.map((item: any) => {
 							return {
-								name: item.param_name,
-								type: item.param_type,
-								desc: item.param_desc,
+								param_name: item.param_name,
+								param_type: item.param_type,
+								param_desc: item.param_desc,
 							};
 						}),
 					};
-					api_request_params.push(paramsItem);
 				}
+				api_request_params.push(paramsItem);
 			}
 
 			// 4. 获取该接口JSON形式的请求参数
@@ -55,6 +56,7 @@ class ApisController {
 					http_status: item.http_status,
 					response_name: item.response_name,
 					response_body: JSON.parse(item.response_body),
+					// response_body: item.response_body,
 				};
 			});
 
@@ -137,13 +139,15 @@ class ApisController {
 							param_type: param.param_type,
 							param_desc: param.param_desc,
 						};
-						await queryPromise('INSERT INTO request_params SET ?', paramItem);
+						if (paramItem.param_name !== '') {
+							await queryPromise('INSERT INTO request_params SET ?', paramItem);
+						}
 					});
 				});
 			}
 
 			// 4. 把所有的api_request_JSON都删除，然后再插入
-			if (api_request_JSON) {
+			if (api_request_JSON && api_request_JSON !== undefined) {
 				await queryPromise('DELETE FROM request_JSON WHERE api_id = ?', api_id);
 				await queryPromise('INSERT INTO request_JSON SET ?', {
 					JSON_body: api_request_JSON,
