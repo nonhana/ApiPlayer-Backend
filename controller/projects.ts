@@ -439,6 +439,8 @@ class ProjectsController {
 				for (let i = 0; i < env_list.length; i++) {
 					const env_type = env_list[i].env_type;
 					const env_baseurl = env_list[i].env_baseurl;
+					console.log('env_type', env_type);
+					console.log('env_baseurl', env_baseurl);
 					await queryPromise('UPDATE project_env SET ? WHERE project_id = ? AND env_type = ?', [{ env_baseurl }, project_id, env_type]);
 				}
 			}

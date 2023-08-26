@@ -149,8 +149,11 @@ class ApisController {
 			// 4. 把所有的api_request_JSON都删除，然后再插入
 			if (api_request_JSON && api_request_JSON !== undefined) {
 				await queryPromise('DELETE FROM request_JSON WHERE api_id = ?', api_id);
+				// 去掉api_request_JSON中的\n和\t
+				const JSON_body = api_request_JSON.replace(/\n/g, '').replace(/\t/g, '');
 				await queryPromise('INSERT INTO request_JSON SET ?', {
-					JSON_body: api_request_JSON,
+					api_id,
+					JSON_body,
 				});
 			}
 
@@ -207,43 +210,53 @@ class ApisController {
 			let Header: Array<Record<string, any>> = [];
 			api_request_params.forEach((item: any) => {
 				if (item.type === 0) {
-					item.params_list.forEach((item: any) => {
-						Params.push({
-							key: item.param_name,
-							value: item.param_value,
-						});
+					item.params_list.forEach((param: any) => {
+						if (param.param_name !== '') {
+							Params.push({
+								key: param.param_name,
+								value: param.param_value,
+							});
+						}
 					});
 				}
 				if (item.type === 1) {
-					item.params_list.forEach((item: any) => {
-						Body_formData.push({
-							key: item.param_name,
-							value: item.param_value,
-						});
+					item.params_list.forEach((param: any) => {
+						if (param.param_name !== '') {
+							Body_formData.push({
+								key: param.param_name,
+								value: param.param_value,
+							});
+						}
 					});
 				}
 				if (item.type === 2) {
-					item.params_list.forEach((item: any) => {
-						Body_wwwFormUrlencoded.push({
-							key: item.param_name,
-							value: item.param_value,
-						});
+					item.params_list.forEach((param: any) => {
+						if (param.param_name !== '') {
+							Body_wwwFormUrlencoded.push({
+								key: param.param_name,
+								value: param.param_value,
+							});
+						}
 					});
 				}
 				if (item.type === 3) {
-					item.params_list.forEach((item: any) => {
-						Cookies.push({
-							key: item.param_name,
-							value: item.param_value,
-						});
+					item.params_list.forEach((param: any) => {
+						if (param.param_name !== '') {
+							Cookies.push({
+								key: param.param_name,
+								value: param.param_value,
+							});
+						}
 					});
 				}
 				if (item.type === 4) {
-					item.params_list.forEach((item: any) => {
-						Header.push({
-							key: item.param_name,
-							value: item.param_value,
-						});
+					item.params_list.forEach((param: any) => {
+						if (param.param_name !== '') {
+							Header.push({
+								key: param.param_name,
+								value: param.param_value,
+							});
+						}
 					});
 				}
 			});
@@ -257,38 +270,27 @@ class ApisController {
 			// 4. 获取全局的信息，并插入到对应的位置
 			const { project_id } = (await queryPromise('SELECT project_id FROM apis WHERE api_id = ?', api_id))[0];
 			const { project_current_type } = (await queryPromise('SELECT project_current_type FROM projects WHERE project_id = ?', project_id))[0];
-			const { env_baseurl } = await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ?', [
-				project_id,
-				project_current_type,
-			]);
+			const { env_baseurl } = (
+				await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ?', [project_id, project_current_type])
+			)[0];
+			console.log('env_baseurl', env_baseurl);
 			const paramsSource = await queryPromise('SELECT * FROM global_params WHERE project_id = ?', project_id);
 			paramsSource.forEach((item: any) => {
-				if (item.param_type === 0) {
-					Params.push({
+				// 0-Header，1-Cookie，2-Query
+				if (item.father_type === 0) {
+					Header.push({
 						key: item.param_name,
 						value: JSON.parse(item.param_value).value,
 					});
 				}
-				if (item.param_type === 1) {
-					Body_formData.push({
-						key: item.param_name,
-						value: JSON.parse(item.param_value).value,
-					});
-				}
-				if (item.param_type === 2) {
-					Body_wwwFormUrlencoded.push({
-						key: item.param_name,
-						value: JSON.parse(item.param_value).value,
-					});
-				}
-				if (item.param_type === 3) {
+				if (item.father_type === 1) {
 					Cookies.push({
 						key: item.param_name,
 						value: JSON.parse(item.param_value).value,
 					});
 				}
-				if (item.param_type === 4) {
-					Header.push({
+				if (item.father_type === 2) {
+					Params.push({
 						key: item.param_name,
 						value: JSON.parse(item.param_value).value,
 					});
@@ -299,7 +301,10 @@ class ApisController {
 			const axiosConfig: AxiosRequestConfig = {
 				method: api_method,
 				url: env_baseurl + api_url,
-				params: Params,
+				params: Params.reduce((acc: any, cur: any) => {
+					acc[cur.key] = cur.value;
+					return acc;
+				}, {}),
 				data: {},
 				headers: Header.reduce((acc: any, cur: any) => {
 					acc[cur.key] = cur.value;
@@ -309,7 +314,7 @@ class ApisController {
 			};
 
 			// 如果为POST请求，那么需要对data进行处理并设置Content-Type(请求体格式)
-			if (api_method === 'POST') {
+			if (api_method.toUpperCase() === 'POST') {
 				if (Body_formData.length > 0) {
 					axiosConfig.data = qs.stringify(
 						Body_formData.reduce((acc: any, cur: any) => {
@@ -317,7 +322,7 @@ class ApisController {
 							return acc;
 						}, {})
 					);
-					axiosConfig.headers!['Content-Type'] = 'application/x-www-form-urlencoded';
+					axiosConfig.headers!['Content-Type'] = 'multipart/form-data';
 				}
 				if (Body_wwwFormUrlencoded.length > 0) {
 					axiosConfig.data = qs.stringify(
@@ -334,13 +339,14 @@ class ApisController {
 				}
 			}
 
-			const response = await axios(axiosConfig);
+			const response = (await axios(axiosConfig)).data;
 
 			// 6. 将结果返回
 			res.status(200).json({
 				result_code: 0,
 				result_message: 'api run success',
-				data: response.data,
+				sourceConfig: axiosConfig,
+				data: response,
 			});
 		} catch (error: any) {
 			res.status(500).json({
