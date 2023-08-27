@@ -314,7 +314,7 @@ class ApisController {
 			};
 
 			// 如果为POST请求，那么需要对data进行处理并设置Content-Type(请求体格式)
-			if (api_method.toUpperCase() === 'POST') {
+			if (api_method === 'POST') {
 				if (Body_formData.length > 0) {
 					axiosConfig.data = qs.stringify(
 						Body_formData.reduce((acc: any, cur: any) => {

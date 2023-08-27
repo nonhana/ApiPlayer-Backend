@@ -1,277 +1,229 @@
-# this is an example of the Uber API
-# as a demonstration of an API spec in YAML
-swagger: '2.0'
 info:
-  title: Uber API
-  description: Move your app forward with the Uber API
-  version: "1.0.0"
-# the domain of the service
-host: api.uber.com
-# array of all schemes that your API supports
-schemes:
-  - https
-# will be prefixed to all paths
-basePath: /v1
-produces:
-  - application/json
+  title: ApiPlayer
+  description: 第六届青训营前端大项目2 - HTTP 接口管理平台
+  version: 1.0.0
+tags:
+  - name: 项目详情
 paths:
-  /products:
+  /apis/apiinfo:
     get:
-      summary: Product Types
-      description: |
-        The Products endpoint returns information about the *Uber* products
-        offered at a given location. The response includes the display name
-        and other details about each product, and lists the products in the
-        proper display order.
-      parameters:
-        - name: latitude
-          in: query
-          description: Latitude component of location.
-          required: true
-          type: number
-          format: double
-        - name: longitude
-          in: query
-          description: Longitude component of location.
-          required: true
-          type: number
-          format: double
+      summary: 获取某API详情信息
+      x-apifox-folder: 项目详情
+      x-apifox-status: developing
+      deprecated: false
+      description: 点击左侧栏某个API后，在右侧主界面获取到该API的详细信息并加以展示。
       tags:
-        - Products
-      responses:
-        200:
-          description: An array of products
-          schema:
-            type: array
-            items:
-              $ref: '#/definitions/Product'
-        default:
-          description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-  /estimates/price:
-    get:
-      summary: Price Estimates
-      description: |
-        The Price Estimates endpoint returns an estimated price range
-        for each product offered at a given location. The price estimate is
-        provided as a formatted string with the full price range and the localized
-        currency symbol.<br><br>The response also includes low and high estimates,
-        and the [ISO 4217](http://en.wikipedia.org/wiki/ISO_4217) currency code for
-        situations requiring currency conversion. When surge is active for a particular
-        product, its surge_multiplier will be greater than 1, but the price estimate
-        already factors in this multiplier.
+        - 项目详情
       parameters:
-        - name: start_latitude
+        - name: api_id
           in: query
-          description: Latitude component of start location.
-          required: true
+          description: 接口的id
+          required: false
           type: number
-          format: double
-        - name: start_longitude
-          in: query
-          description: Longitude component of start location.
-          required: true
-          type: number
-          format: double
-        - name: end_latitude
-          in: query
-          description: Latitude component of end location.
-          required: true
-          type: number
-          format: double
-        - name: end_longitude
-          in: query
-          description: Longitude component of end location.
-          required: true
-          type: number
-          format: double
-      tags:
-        - Estimates
-      responses:
-        200:
-          description: An array of price estimates by product
-          schema:
-            type: array
-            items:
-              $ref: '#/definitions/PriceEstimate'
-        default:
-          description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-  /estimates/time:
-    get:
-      summary: Time Estimates
-      description: The Time Estimates endpoint returns ETAs for all products offered at a given location, with the responses expressed as integers in seconds. We recommend that this endpoint be called every minute to provide the most accurate, up-to-date ETAs.
-      parameters:
-        - name: start_latitude
-          in: query
-          description: Latitude component of start location.
-          required: true
-          type: number
-          format: double
-        - name: start_longitude
-          in: query
-          description: Longitude component of start location.
-          required: true
-          type: number
-          format: double
-        - name: customer_uuid
-          in: query
+          x-example: ''
+        - name: Authorization
+          in: header
+          description: ''
           type: string
-          format: uuid
-          description: Unique customer identifier to be used for experience customization.
-        - name: product_id
-          in: query
-          type: string
-          description: Unique identifier representing a specific product for a given latitude & longitude.
-      tags:
-        - Estimates
+          x-example: >-
+            eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjozLCJ1c2VybmFtZSI6Im5vbl9oYW5hIiwiZW1haWwiOiJ6aG91eGlhbmc3NTdAZ21haWwuY29tIiwiaW50cm9kdWNlIjoi6buY6K6k5LuL57uNIiwiYXZhdGFyIjoiaHR0cDovLzEzLjExNS4xMTkuMTM5OjMwMDAvdXBsb2Fkcy9pbWFnZXMvYXZhdGFycy8xNjkyNzU4Mjc1NzgwXzczOTYwNTAwMi5qcGVnIiwiaWF0IjoxNjkzMDk4MDg0LCJleHAiOjE2OTMxODQ0ODR9.7R6SNwbiMxo62G8ADolyfPFuT3ej7cHV7Rj_0blcwog
       responses:
-        200:
-          description: An array of products
+        '200':
+          description: 成功
           schema:
-            type: array
-            items:
-              $ref: '#/definitions/Product'
-        default:
-          description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-  /me:
-    get:
-      summary: User Profile
-      description: The User Profile endpoint returns information about the Uber user that has authorized with the application.
-      tags:
-        - User
-      responses:
-        200:
-          description: Profile information for a user
-          schema:
-            $ref: '#/definitions/Profile'
-        default:
-          description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-  /history:
-    get:
-      summary: User Activity
-      description: The User Activity endpoint returns data about a user's lifetime activity with Uber. The response will include pickup locations and times, dropoff locations and times, the distance of past requests, and information about which products were requested.<br><br>The history array in the response will have a maximum length based on the limit parameter. The response value count may exceed limit, therefore subsequent API requests may be necessary.
-      parameters:
-        - name: offset
-          in: query
-          type: integer
-          format: int32
-          description: Offset the list of returned results by this amount. Default is zero.
-        - name: limit
-          in: query
-          type: integer
-          format: int32
-          description: Number of items to retrieve. Default is 5, maximum is 100.
-      tags:
-        - User
-      responses:
-        200:
-          description: History information for the given user
-          schema:
-            $ref: '#/definitions/Activities'
-        default:
-          description: Unexpected error
-          schema:
-            $ref: '#/definitions/Error'
-definitions:
-  Product:
-    type: object
-    properties:
-      product_id:
-        type: string
-        description: Unique identifier representing a specific product for a given latitude & longitude. For example, uberX in San Francisco will have a different product_id than uberX in Los Angeles.
-      description:
-        type: string
-        description: Description of product.
-      display_name:
-        type: string
-        description: Display name of product.
-      capacity:
-        type: string
-        description: Capacity of product. For example, 4 people.
-      image:
-        type: string
-        description: Image URL representing the product.
-  PriceEstimate:
-    type: object
-    properties:
-      product_id:
-        type: string
-        description: Unique identifier representing a specific product for a given latitude & longitude. For example, uberX in San Francisco will have a different product_id than uberX in Los Angeles
-      currency_code:
-        type: string
-        description: "[ISO 4217](http://en.wikipedia.org/wiki/ISO_4217) currency code."
-      display_name:
-        type: string
-        description: Display name of product.
-      estimate:
-        type: string
-        description: Formatted string of estimate in local currency of the start location. Estimate could be a range, a single number (flat rate) or "Metered" for TAXI.
-      low_estimate:
-        type: number
-        description: Lower bound of the estimated price.
-      high_estimate:
-        type: number
-        description: Upper bound of the estimated price.
-      surge_multiplier:
-        type: number
-        description: Expected surge multiplier. Surge is active if surge_multiplier is greater than 1. Price estimate already factors in the surge multiplier.
-  Profile:
-    type: object
-    properties:
-      first_name:
-        type: string
-        description: First name of the Uber user.
-      last_name:
-        type: string
-        description: Last name of the Uber user.
-      email:
-        type: string
-        description: Email address of the Uber user
-      picture:
-        type: string
-        description: Image URL of the Uber user.
-      promo_code:
-        type: string
-        description: Promo code of the Uber user.
-  Activity:
-    type: object
-    properties:
-      uuid:
-        type: string
-        description: Unique identifier for the activity
-  Activities:
-    type: object
-    properties:
-      offset:
-        type: integer
-        format: int32
-        description: Position in pagination.
-      limit:
-        type: integer
-        format: int32
-        description: Number of items to retrieve (100 max).
-      count:
-        type: integer
-        format: int32
-        description: Total number of items available.
-      history:
-        type: array
-        items:
-          $ref: '#/definitions/Activity'
-  Error:
-    type: object
-    properties:
-      code:
-        type: integer
-        format: int32
-      message:
-        type: string
-      fields:
-        type: string
+            type: object
+            properties:
+              result_code:
+                type: number
+                title: 状态码
+                description: 0-成功，1-失败
+                additionalProperties: false
+              result_msg:
+                type: string
+                title: 状态信息
+                additionalProperties: false
+              api_info:
+                type: object
+                properties:
+                  api_id:
+                    type: number
+                    title: 接口id
+                    additionalProperties: false
+                  dictionary_id:
+                    type: number
+                    title: 接口所属的目录id
+                  api_editor_id:
+                    type: number
+                    title: 最近一次修改这个api的人的id
+                  api_creator_id:
+                    type: number
+                    title: 接口创建人的id
+                  api_createdAt:
+                    type: string
+                    title: 接口创建时间
+                    description: 'yyyy-MM-dd hh:mm:ss的形式。'
+                  api_editedAt:
+                    type: string
+                    title: 接口修改时间
+                    description: 'yyyy-MM-dd hh:mm:ss的形式。'
+                  api_name:
+                    type: string
+                    title: 接口名称
+                    additionalProperties: false
+                  api_method:
+                    type: string
+                    title: 接口请求方法
+                    description: 以一般的字符串进行填写，比如GET方法就直接写'GET'。
+                  api_url:
+                    type: string
+                    title: 接口请求url地址
+                    additionalProperties: false
+                  api_status:
+                    type: number
+                    title: 接口状态
+                    description: 0-开发中，1-测试中，2-已发布，3-将废弃
+                    additionalProperties: false
+                  api_principal_id:
+                    type: number
+                    title: 该接口的负责人id
+                    additionalProperties: false
+                  api_desc:
+                    type: string
+                    title: 接口说明
+                    additionalProperties: false
+                  baseUrl:
+                    type: string
+                    title: 该接口的前置url
+                  api_request_params:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        type:
+                          type: number
+                          title: 请求参数的顶层类型
+                          description: >-
+                            0-Params，1-Body(form-data)，2-Body(x-www-form-unlencoded)，3-Cookie，4-Header。此处以Params参数为例，也就是表格的形式来填写参数。
+                          additionalProperties: false
+                        params_list:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              param_name:
+                                type: string
+                                title: 参数名称
+                                additionalProperties: false
+                              param_type:
+                                type: integer
+                                title: 参数类型
+                                description: 0-number，1-integer，2-string，3-array
+                              param_desc:
+                                type: string
+                                title: 参数说明
+                                additionalProperties: false
+                            x-apifox-orders:
+                              - param_name
+                              - param_type
+                              - param_desc
+                            required:
+                              - param_name
+                              - param_type
+                              - param_desc
+                            x-apifox-ignore-properties: []
+                          title: 参数列表
+                      x-apifox-orders:
+                        - type
+                        - params_list
+                      required:
+                        - type
+                      x-apifox-ignore-properties: []
+                    title: 接口的请求参数
+                  api_request_JSON:
+                    type: string
+                    title: 接口的请求体
+                    description: Body-JSON
+                  api_responses:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        response_id:
+                          type: integer
+                          title: 响应的id
+                        http_status:
+                          type: string
+                          title: 返回时的HTTP状态码
+                        response_name:
+                          type: string
+                          title: 返回响应的名称
+                        response_body:
+                          type: string
+                          title: 返回响应主体
+                          description: 规定以JSON形式的数据进行返回。跟在TypeScript中规定某interface的形式类似。
+                      x-apifox-orders:
+                        - response_id
+                        - http_status
+                        - response_name
+                        - response_body
+                      required:
+                        - http_status
+                        - response_body
+                        - response_name
+                        - response_id
+                      x-apifox-ignore-properties: []
+                    title: 接口返回响应
+                x-apifox-orders:
+                  - api_id
+                  - dictionary_id
+                  - api_editor_id
+                  - api_creator_id
+                  - api_createdAt
+                  - api_editedAt
+                  - api_name
+                  - api_method
+                  - api_url
+                  - api_status
+                  - api_principal_id
+                  - api_desc
+                  - baseUrl
+                  - api_request_params
+                  - api_request_JSON
+                  - api_responses
+                required:
+                  - api_id
+                  - api_name
+                  - api_url
+                  - api_status
+                  - api_principal_id
+                  - baseUrl
+                  - api_desc
+                  - api_request_params
+                  - api_method
+                  - dictionary_id
+                  - api_editor_id
+                  - api_creator_id
+                  - api_createdAt
+                  - api_editedAt
+                  - api_request_JSON
+                  - api_responses
+                x-apifox-ignore-properties: []
+            x-apifox-orders:
+              - result_code
+              - result_msg
+              - api_info
+            required:
+              - result_code
+              - result_msg
+              - api_info
+            x-apifox-ignore-properties: []
+      x-run-in-apifox: 'https://apifox.com/web/project/3099285/apis/api-101341797-run'
+      produces:
+        - application/json
+swagger: '2.0'
+host: '13.115.119.139:3000'
+schemes:
+  - http
+basePath: /
+definitions: {}
+x-components: {}

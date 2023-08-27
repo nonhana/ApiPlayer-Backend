@@ -483,9 +483,14 @@ class ProjectsController {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
 		}
-		const { project_id, dictionary_id } = req.body;
-		const yamlPath = `public/uploads/files/yamls/${req.file.filename}`;
+		const { project_id } = req.body;
 		try {
+			// 通过project_id，获取到这个项目的根目录
+			const { dictionary_id } = (
+				await queryPromise('SELECT dictionary_id FROM dictionaries WHERE project_id = ? AND father_id IS NULL', project_id)
+			)[0];
+			const yamlPath = `public/uploads/files/yamls/${req.file.filename}`;
+
 			const yamlContent = fs.readFileSync(yamlPath, 'utf8');
 			const jsonData: any = yaml.load(yamlContent);
 
