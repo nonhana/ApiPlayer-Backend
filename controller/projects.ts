@@ -73,9 +73,14 @@ class ProjectsController {
 			await queryPromise(sql3, { project_id: projectResult.insertId, dictionary_name: '根目录' });
 
 			// 4. 预置这个项目的环境：0~3：开发环境、测试环境、正式环境、mock.js环境
-			for (let i = 0; i < 4; i++) {
+			for (let i = 0; i < 3; i++) {
 				await queryPromise('INSERT INTO project_env (project_id, env_type) VALUES (?, ?) ', [projectResult.insertId, i]);
 			}
+			await queryPromise('INSERT INTO project_env (project_id, env_type, env_baseurl) VALUES (?, ?, ?) ', [
+				projectResult.insertId,
+				3,
+				'http://13.115.119.139:3000/projects/mock',
+			]);
 
 			res.status(200).json({
 				result_code: 0,

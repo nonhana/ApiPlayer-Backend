@@ -273,9 +273,7 @@ class ApisController {
 			const { env_baseurl } = (
 				await queryPromise('SELECT env_baseurl FROM project_env WHERE project_id = ? AND env_type = ?', [project_id, project_current_type])
 			)[0];
-			console.log('env_baseurl', env_baseurl);
-			const paramsSource = await queryPromise('SELECT * FROM global_params WHERE project_id = ?', project_id);
-			paramsSource.forEach((item: any) => {
+			(await queryPromise('SELECT * FROM global_params WHERE project_id = ?', project_id)).forEach((item: any) => {
 				// 0-Header，1-Cookie，2-Query
 				if (item.father_type === 0) {
 					Header.push({
@@ -298,56 +296,75 @@ class ApisController {
 			});
 
 			// 5. 通过axios向指定的url发送请求
-			const axiosConfig: AxiosRequestConfig = {
-				method: api_method,
-				url: env_baseurl + api_url,
-				params: Params.reduce((acc: any, cur: any) => {
-					acc[cur.key] = cur.value;
-					return acc;
-				}, {}),
-				data: {},
-				headers: Header.reduce((acc: any, cur: any) => {
-					acc[cur.key] = cur.value;
-					return acc;
-				}, {}),
-				withCredentials: true,
-			};
+			if (env_baseurl !== 'http://13.115.119.139:3000/projects/mock') {
+				const axiosConfig: AxiosRequestConfig = {
+					method: api_method,
+					url: env_baseurl + api_url,
+					params: Params.reduce((acc: any, cur: any) => {
+						acc[cur.key] = cur.value;
+						return acc;
+					}, {}),
+					data: {},
+					headers: Header.reduce((acc: any, cur: any) => {
+						acc[cur.key] = cur.value;
+						return acc;
+					}, {}),
+					withCredentials: true,
+				};
 
-			// 如果为POST请求，那么需要对data进行处理并设置Content-Type(请求体格式)
-			if (api_method === 'POST') {
-				if (Body_formData.length > 0) {
-					axiosConfig.data = qs.stringify(
-						Body_formData.reduce((acc: any, cur: any) => {
-							acc[cur.key] = cur.value;
-							return acc;
-						}, {})
-					);
-					axiosConfig.headers!['Content-Type'] = 'multipart/form-data';
+				// 如果为POST请求，那么需要对data进行处理并设置Content-Type(请求体格式)
+				if (api_method === 'POST') {
+					if (Body_formData.length > 0) {
+						axiosConfig.data = qs.stringify(
+							Body_formData.reduce((acc: any, cur: any) => {
+								acc[cur.key] = cur.value;
+								return acc;
+							}, {})
+						);
+						axiosConfig.headers!['Content-Type'] = 'multipart/form-data';
+					}
+					if (Body_wwwFormUrlencoded.length > 0) {
+						axiosConfig.data = qs.stringify(
+							Body_wwwFormUrlencoded.reduce((acc: any, cur: any) => {
+								acc[cur.key] = cur.value;
+								return acc;
+							}, {})
+						);
+						axiosConfig.headers!['Content-Type'] = 'application/x-www-form-urlencoded';
+					}
+					if (Body_JSON !== '') {
+						axiosConfig.data = Body_JSON;
+						axiosConfig.headers!['Content-Type'] = 'application/json';
+					}
 				}
-				if (Body_wwwFormUrlencoded.length > 0) {
-					axiosConfig.data = qs.stringify(
-						Body_wwwFormUrlencoded.reduce((acc: any, cur: any) => {
-							acc[cur.key] = cur.value;
-							return acc;
-						}, {})
-					);
-					axiosConfig.headers!['Content-Type'] = 'application/x-www-form-urlencoded';
-				}
-				if (Body_JSON !== '') {
-					axiosConfig.data = Body_JSON;
-					axiosConfig.headers!['Content-Type'] = 'application/json';
-				}
+
+				const response = (await axios(axiosConfig)).data;
+
+				// 6. 将结果返回
+				res.status(200).json({
+					result_code: 0,
+					result_message: 'api run success',
+					sourceConfig: axiosConfig,
+					data: response,
+				});
+			} else {
+				// 获取到api的reponse_body
+				const { response_body } = (await queryPromise('SELECT response_body FROM api_responses WHERE api_id = ?', api_id))[0];
+				const JSON_Schema = JSON.parse(response_body).root;
+				const axiosConfig: AxiosRequestConfig = {
+					method: 'POST',
+					url: 'http://13.115.119.139:3000/projects/mock',
+					data: JSON_Schema,
+					withCredentials: true,
+				};
+				const response = (await axios(axiosConfig)).data;
+				res.status(200).json({
+					result_code: 0,
+					result_message: 'api run success',
+					sourceConfig: axiosConfig,
+					data: response,
+				});
 			}
-
-			const response = (await axios(axiosConfig)).data;
-
-			// 6. 将结果返回
-			res.status(200).json({
-				result_code: 0,
-				result_message: 'api run success',
-				sourceConfig: axiosConfig,
-				data: response,
-			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
