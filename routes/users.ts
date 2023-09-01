@@ -1,10 +1,10 @@
 import express, { Request } from 'express';
-import { auth } from '../middleware/user.middleware';
-import { userController } from '../controller/users';
-import multer from 'multer';
 import path from 'path';
+import multer from 'multer';
+import { userController } from '../controller/users';
 import { usersValidator } from '../paramsValidator/usersValidator';
 import { paramsHandler } from '../middleware/common.middleware';
+import { auth } from '../middleware/user.middleware';
 
 const router = express.Router();
 

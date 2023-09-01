@@ -30,7 +30,6 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 		} else {
 			errorHandler({ error, httpStatus: 401, result_msg: '无效的 token', res });
 		}
-
 		return;
 	}
 	next();

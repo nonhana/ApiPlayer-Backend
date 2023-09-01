@@ -350,10 +350,18 @@ class ApisController {
 			} else {
 				// 获取到api的reponse_body
 				const { response_body } = (await queryPromise('SELECT response_body FROM api_responses WHERE api_id = ?', api_id))[0];
-				const JSON_Schema = JSON.parse(response_body).root;
+
+				// 如果有root，将其取出；没有就直接返回
+				let JSON_Schema = {};
+				if (JSON.parse(response_body).root) {
+					JSON_Schema = JSON.parse(response_body).root;
+				} else {
+					JSON_Schema = JSON.parse(response_body);
+				}
 				const axiosConfig: AxiosRequestConfig = {
 					method: 'POST',
-					url: 'http://13.115.119.139:3000/projects/mock',
+					// url: 'http://127.0.0.1:3000/projects/mock', // 本地测试用
+					url: 'http://13.115.119.139:3000/projects/mock', // 线上用
 					data: JSON_Schema,
 					withCredentials: true,
 				};
