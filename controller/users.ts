@@ -3,7 +3,6 @@ import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index'
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { OkPacket } from 'mysql';
 import { AVATAR_BASE_PATH, AVATAR_SERVER_PATH } from '../constance';
 
 class UserController {
