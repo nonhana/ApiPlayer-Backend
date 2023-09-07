@@ -147,8 +147,8 @@ class ApisController {
 			}
 
 			// 4. 把所有的api_request_JSON都删除，然后再插入
+			await queryPromise('DELETE FROM request_JSON WHERE api_id = ?', api_id);
 			if (api_request_JSON && api_request_JSON !== undefined) {
-				await queryPromise('DELETE FROM request_JSON WHERE api_id = ?', api_id);
 				// 去掉api_request_JSON中的\n和\t
 				const JSON_body = api_request_JSON.replace(/\n/g, '').replace(/\t/g, '');
 				await queryPromise('INSERT INTO request_JSON SET ?', {
