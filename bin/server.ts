@@ -19,8 +19,8 @@ app.set('port', port);
  * Create HTTPS server.
  */
 const options = {
-	key: fs.readFileSync(path.join(__dirname, '../ssl/nonhana.site.key')),
-	cert: fs.readFileSync(path.join(__dirname, '../ssl/nonhana.site_bundle.pem')),
+	key: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana.site.key')),
+	cert: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana.site_bundle.pem')),
 };
 const server = https.createServer(options, app);
 
