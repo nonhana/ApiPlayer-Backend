@@ -296,7 +296,7 @@ class ApisController {
 			});
 
 			// 5. 通过axios向指定的url发送请求
-			if (env_baseurl !== 'http://13.115.119.139:3000/projects/mock') {
+			if (env_baseurl !== 'https://www.nonhana.site:3000/projects/mock') {
 				const axiosConfig: AxiosRequestConfig = {
 					method: api_method,
 					url: env_baseurl + api_url,
@@ -361,7 +361,7 @@ class ApisController {
 				const axiosConfig: AxiosRequestConfig = {
 					method: 'POST',
 					// url: 'http://127.0.0.1:3000/projects/mock', // 本地测试用
-					url: 'http://13.115.119.139:3000/projects/mock', // 线上用
+					url: 'https://www.nonhana.site:3000/projects/mock', // 线上用
 					data: JSON_Schema,
 					withCredentials: true,
 				};
