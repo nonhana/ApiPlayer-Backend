@@ -3,6 +3,7 @@
 .idea/
 # 依赖
 node_modules
+.package-lock.json
 # 编译产物
 dist
 # 静态
