@@ -1,5 +1,12 @@
-node_modules
-dist
-public
+# 编辑器
 .vscode/
 .idea/
+# 依赖
+node_modules
+# 编译产物
+dist
+# 静态
+public
+# 环境变量
+.env
+test-env.ts

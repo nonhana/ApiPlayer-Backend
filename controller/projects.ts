@@ -4,8 +4,10 @@ import type { OkPacket } from 'mysql';
 import type { ApiListItem } from '../utils/types';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
-import { PROJECT_ICON_BASE_PATH, PROJECT_ICON_SERVER_PATH } from '../constance';
 import { JSONSchemaFaker } from 'json-schema-faker';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 interface ApiRequestParam {
 	/**
@@ -32,7 +34,7 @@ class ProjectsController {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
 		}
-		const projectIconPath = `${PROJECT_ICON_SERVER_PATH}/${req.file.filename}`;
+		const projectIconPath = `${process.env.PROJECT_ICON_PATH}/${req.file.filename}`;
 		try {
 			res.status(200).json({
 				result_code: 0,
