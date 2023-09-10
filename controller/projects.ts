@@ -81,7 +81,7 @@ class ProjectsController {
 			await queryPromise('INSERT INTO project_env (project_id, env_type, env_baseurl) VALUES (?, ?, ?) ', [
 				projectResult.insertId,
 				3,
-				'https://www.nonhana.site:3000/projects/mock',
+				process.env.MOCK_URL,
 			]);
 
 			res.status(200).json({
