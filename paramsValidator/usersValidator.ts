@@ -2,7 +2,7 @@ import { body, Meta } from 'express-validator';
 
 const atLeastOneParamExists = (input: any, { req }: Meta) => {
 	if (Object.keys(req.body ?? {}).length === 0) {
-		throw new Error('At least one parameter is required');
+		throw new Error('至少包含一个参数');
 	}
 	return true;
 };

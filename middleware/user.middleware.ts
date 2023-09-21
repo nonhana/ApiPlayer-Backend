@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { Request, Response, NextFunction } from 'express';
 import { unifiedResponseBody, errorHandler } from '../utils/index';
+import dotenv from 'dotenv';
+dotenv.config();
 
 interface AuthenticatedRequest extends Request {
 	state?: {
@@ -23,7 +25,7 @@ export const auth: any = async (req: AuthenticatedRequest, res: Response, next: 
 	// 如果前端发的请求带了 token，就验证 token
 	try {
 		req.state = {};
-		req.state.userInfo = jwt.verify(token, 'apiPlayer');
+		req.state.userInfo = jwt.verify(token, process.env.JWT_SECRET!);
 	} catch (error: any) {
 		if (error.name === 'TokenExpiredError') {
 			errorHandler({ error, httpStatus: 401, result_msg: 'token 已过期', res });

@@ -135,7 +135,7 @@ class UserController {
 				const { password, createdAt, updatedAt, ...restUserInfo } = userInfo;
 
 				// 根据 id, email, username, introduce, avatar 生成token
-				const token = jwt.sign(restUserInfo, 'apiPlayer', { expiresIn: '1d' });
+				const token = jwt.sign(restUserInfo, process.env.JWT_SECRET!, { expiresIn: '1d' });
 
 				unifiedResponseBody({ result_msg: '登录成功', result: { token }, res });
 			})();

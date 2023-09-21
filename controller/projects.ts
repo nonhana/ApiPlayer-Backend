@@ -29,7 +29,7 @@ interface ApiResponse {
 
 class ProjectsController {
 	// 上传项目图标。只保存，不更新数据库
-	uploadProjectIcon = async (req: Request, res: Response) => {
+	uploadProjectIcon = (req: Request, res: Response) => {
 		if (!req.file) {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
