@@ -4,7 +4,7 @@ import { unifiedResponseBody, errorHandler } from '../utils/index';
 import dotenv from 'dotenv';
 dotenv.config();
 
-interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends Request {
 	state?: {
 		userInfo?: any;
 	};
