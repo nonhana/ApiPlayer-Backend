@@ -699,6 +699,42 @@ class ProjectsController {
 
 		res.status(200).json(mockedData);
 	};
+
+	// 获取到某个项目的历史操作记录信息
+	getHistoryInfo = async (req: Request, res: Response) => {
+		const { project_id } = req.query;
+		try {
+			const sql = 'SELECT * FROM api_versions WHERE project_id = ? ORDER BY createdAt DESC';
+			const historyInfo = await queryPromise(sql, project_id);
+
+			// 根据user_id获取用户的基本信息
+			const sql2 = 'SELECT user_id,username,avatar FROM users WHERE user_id = ?';
+			const result = await Promise.all(
+				historyInfo.map(async (item: any) => {
+					const userInfo = await queryPromise(sql2, item.user_id);
+					return {
+						...item,
+						user_name: userInfo[0].username,
+						user_avatar: userInfo[0].avatar,
+					};
+				})
+			);
+
+			res.status(200).json({
+				result_code: 0,
+				result_msg: 'get project history info success',
+				history_info: result,
+			});
+		} catch (error: any) {
+			console.log('error', error);
+			res.status(500).json({
+				result_code: 1,
+				result_msg: error.message || 'An error occurred',
+			});
+		} finally {
+			// connection.end();
+		}
+	};
 }
 
 export const projectsController = new ProjectsController();

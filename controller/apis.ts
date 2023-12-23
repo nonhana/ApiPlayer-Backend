@@ -13,10 +13,11 @@ class ApisController {
 		const { ...apiInfo } = req.body;
 		try {
 			// 在api_version表当中插入修改的记录
-			const { api_name } = apiInfo;
+			const { project_id } = apiInfo;
 			const { insertId } = await queryPromise('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
-				version_msg: `新增了接口${api_name}`,
+				project_id,
+				version_msg: `新增了接口。`,
 			});
 
 			// 1. 插入api_info，拿到api_id
@@ -41,13 +42,14 @@ class ApisController {
 
 	// 删除接口
 	deleteApi = async (req: AuthenticatedRequest, res: Response) => {
-		const { api_id } = req.body;
+		const { api_id, project_id } = req.body;
 		try {
 			// 在api_version表当中插入修改的记录
 			const { api_name } = (await queryPromise('SELECT api_name FROM apis WHERE api_id = ?', api_id))[0];
 			const { insertId } = await queryPromise('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
-				version_msg: `删除了接口${api_name}，接口id为${api_id}`,
+				project_id,
+				version_msg: `删除了接口：${api_name} ，接口id为：${api_id} 。`,
 			});
 
 			// 软删除：把delete_status改为1，并且把version_id更新
@@ -67,11 +69,12 @@ class ApisController {
 
 	// 更新接口
 	updateApi = async (req: AuthenticatedRequest, res: Response) => {
-		const { api_id, api_request_params, api_request_JSON, api_responses, ...apiInfo } = req.body;
+		const { api_id, project_id, api_request_params, api_request_JSON, api_responses, ...apiInfo } = req.body;
 		try {
 			// 在api_version表当中插入修改的记录并获取到version_id
 			const { insertId: version_id } = await queryPromise('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
+				project_id,
 				version_msg: '',
 			});
 
@@ -89,11 +92,11 @@ class ApisController {
 			// 1.3 更新apis表
 			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, version_id }, api_id]);
 
-			version_msg += `更新了接口${apiInfo.api_name}的基本信息；`;
+			version_msg += `更新了接口：${apiInfo.api_name} 的基本信息；`;
 
 			// 2. 更新api_responses
 			if (api_responses) {
-				version_msg += `更新了接口${apiInfo.api_name}的返回响应：`;
+				version_msg += `更新了接口：${apiInfo.api_name} 的返回响应：`;
 				// 软删除：将delete_status改为1，版本号改为最新的
 				await queryPromise('UPDATE api_responses SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
 				api_responses.forEach(async (item: any) => {
@@ -111,7 +114,7 @@ class ApisController {
 
 			// 3. 更新api_request_params
 			if (api_request_params) {
-				version_msg += `更新了接口${apiInfo.api_name}的请求参数：`;
+				version_msg += `更新了接口：${apiInfo.api_name} 的请求参数：`;
 				// 软删除：将delete_status改为1，版本号改为最新的
 				await queryPromise('UPDATE request_params SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
 				api_request_params.forEach((item: any) => {
@@ -134,7 +137,7 @@ class ApisController {
 
 			// 4. 更新api_request_JSON
 			if (api_request_JSON && api_request_JSON !== undefined) {
-				version_msg += `更新了接口${apiInfo.api_name}的bodyJSON；`;
+				version_msg += `更新了接口：${apiInfo.api_name} 的bodyJSON；`;
 				// 软删除：将delete_status改为1，版本号改为最新的
 				await queryPromise('UPDATE request_JSON SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
 				// 去掉api_request_JSON中的\n和\t

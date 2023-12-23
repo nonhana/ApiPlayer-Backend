@@ -100,4 +100,7 @@ router.post('/importswagger', auth, yamlUpload.single('yamlFile'), projectsContr
 // mock
 router.post('/mock', cors(), projectsController.mock);
 
+// 获取到某个项目的历史操作记录信息
+router.get('/history', auth, projectsController.getHistoryInfo);
+
 export default router;
