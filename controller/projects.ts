@@ -446,8 +446,6 @@ class ProjectsController {
 				for (let i = 0; i < env_list.length; i++) {
 					const env_type = env_list[i].env_type;
 					const env_baseurl = env_list[i].env_baseurl;
-					console.log('env_type', env_type);
-					console.log('env_baseurl', env_baseurl);
 					await queryPromise('UPDATE project_env SET ? WHERE project_id = ? AND env_type = ?', [{ env_baseurl }, project_id, env_type]);
 				}
 			}
@@ -557,7 +555,6 @@ class ProjectsController {
 				api_info.api_creator_id = (req as any).state.userInfo.user_id;
 				// 2.2 处理api_request_params
 				const parameters = paths[path][Object.keys(paths[path])[0]].parameters;
-				console.log('parameters', parameters);
 				if (parameters) {
 					for (let i = 0; i < parameters.length; i++) {
 						/**
@@ -708,7 +705,7 @@ class ProjectsController {
 			const historyInfo = await queryPromise(sql, project_id);
 
 			// 根据user_id获取用户的基本信息
-			const sql2 = 'SELECT user_id,username,avatar FROM users WHERE user_id = ?';
+			const sql2 = 'SELECT user_id, username, avatar FROM users WHERE user_id = ?';
 			const result = await Promise.all(
 				historyInfo.map(async (item: any) => {
 					const userInfo = await queryPromise(sql2, item.user_id);
@@ -726,13 +723,76 @@ class ProjectsController {
 				history_info: result,
 			});
 		} catch (error: any) {
-			console.log('error', error);
 			res.status(500).json({
 				result_code: 1,
 				result_msg: error.message || 'An error occurred',
 			});
-		} finally {
-			// connection.end();
+		}
+	};
+
+	// 回滚某个项目的历史记录
+	rollback = async (req: Request, res: Response) => {
+		const { version_id } = req.body;
+		try {
+			// 1. 回滚api_info
+			// 1.1 从api_backup中拿到对应的version_id的api_info
+			const targetApiInfo = await queryPromise('SELECT * FROM api_backup WHERE version_id = ?', version_id);
+			if (targetApiInfo.length > 0) {
+				// 1.2 剔除掉backup_id、api_id、project_id、version_id、api_createdAt、api_editedAt、delete_status属性，拿到对应的api_id，然后更新apis表中对应的api
+				const apiInfo = JSON.parse(JSON.stringify(targetApiInfo[0]));
+				delete apiInfo.backup_id;
+				delete apiInfo.api_id;
+				delete apiInfo.project_id;
+				delete apiInfo.version_id;
+				delete apiInfo.api_createdAt;
+				delete apiInfo.api_editedAt;
+				delete apiInfo.delete_status;
+				await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [apiInfo, targetApiInfo[0].api_id]);
+				// 1.3 把api_backup表中对应的version_id的记录删除
+				await queryPromise('DELETE FROM api_backup WHERE version_id = ?', version_id);
+			}
+
+			// 2. 回滚api_request_params
+			const targetRequestParams = await queryPromise('SELECT * FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
+			if (targetRequestParams.length > 0) {
+				// 2.1 把request_params表中对应的version_id的delete_status为0的记录删除
+				await queryPromise('DELETE FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
+				// 2.2 把request_params表中对应的version_id的delete_status为1的记录的delete_status改为0
+				await queryPromise('UPDATE request_params SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			}
+
+			// 3. 回滚api_request_JSON
+			const targetRequestJSON = await queryPromise('SELECT * FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
+			if (targetRequestJSON.length > 0) {
+				// 3.1 把request_JSON表中对应的version_id的delete_status为0的记录删除
+				await queryPromise('DELETE FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
+				// 3.2 把request_JSON表中对应的version_id的delete_status为1的记录的delete_status改为0
+				await queryPromise('UPDATE request_JSON SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			}
+
+			// 4. 回滚api_responses
+			const targetResponses = await queryPromise('SELECT * FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
+			if (targetResponses.length > 0) {
+				// 4.1 把api_responses表中对应的version_id的delete_status为0的记录删除
+				await queryPromise('DELETE FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
+				// 4.2 把api_responses表中对应的version_id的delete_status为1的记录的delete_status改为0
+				await queryPromise('UPDATE api_responses SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			}
+
+			// 5. 删除api_versions表中对应的version_id的记录
+			await queryPromise('DELETE FROM api_versions WHERE version_id = ?', version_id);
+
+			// 6. 回滚成功，返回响应
+			res.status(200).json({
+				result_code: 0,
+				result_msg: '回滚成功',
+			});
+		} catch (error) {
+			res.status(500).json({
+				result_code: 1,
+				result_msg: '回滚失败',
+				error,
+			});
 		}
 	};
 }

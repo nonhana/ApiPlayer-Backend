@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { queryPromise, unifiedResponseBody, errorHandler } from '../utils/index';
+import { queryPromise } from '../utils/index';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -21,7 +21,6 @@ class UserController {
 
 		// 生成随机的 6 位数的数字验证码
 		const verificationCode = String(1e5 + Math.floor(Math.random() * 1e5 * 9));
-		console.log({ verificationCode });
 		this.emailCaptchaMap.set(email, verificationCode);
 
 		setTimeout(() => {
@@ -57,10 +56,9 @@ class UserController {
 				}
 			) => {
 				if (error) {
-					errorHandler({ error, result_msg: '发送验证码失败', res });
+					res.status(500).json({ result_code: 1, result_msg: '发送验证码失败' });
 				} else {
-					console.log('Email sent: ' + info?.response);
-					unifiedResponseBody({ result_msg: '验证码已发送', res });
+					res.status(200).json({ result_code: 0, result_msg: '验证码已发送' });
 				}
 			}
 		);
@@ -74,18 +72,18 @@ class UserController {
 			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length > 0) {
-				unifiedResponseBody({ result_code: 1, result_msg: '该 email 已存在', res });
+				res.status(200).json({ result_code: 1, result_msg: '该 email 已存在' });
 				return;
 			}
 		} catch (error) {
-			errorHandler({ error, result_msg: '注册失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '注册失败', error });
 			return;
 		}
 
 		const emailVerificationCode = this.emailCaptchaMap.get(email);
 
 		if (captcha !== emailVerificationCode) {
-			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
+			res.status(200).json({ result_code: 1, result_msg: '验证码不正确' });
 			return;
 		}
 
@@ -105,9 +103,9 @@ class UserController {
 				0,
 			]);
 
-			unifiedResponseBody({ result_msg: '注册成功', res });
+			res.status(200).json({ result_code: 0, result_msg: '注册成功' });
 		} catch (error) {
-			errorHandler({ error, result_msg: '注册失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '注册失败', error });
 		}
 	};
 
@@ -119,14 +117,14 @@ class UserController {
 			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length === 0) {
-				unifiedResponseBody({ result_code: 1, result_msg: '该 email 不存在', res });
+				res.status(200).json({ result_code: 1, result_msg: '该 email 不存在' });
 				return;
 			}
 
 			const userInfo = retrieveRes[0];
 			const compareRes = bcrypt.compareSync(password, userInfo.password);
 			if (!compareRes) {
-				unifiedResponseBody({ result_code: 1, result_msg: 'password 不正确', res });
+				res.status(200).json({ result_code: 1, result_msg: 'password 不正确' });
 				return;
 			}
 
@@ -137,10 +135,10 @@ class UserController {
 				// 根据 id, email, username, introduce, avatar 生成token
 				const token = jwt.sign(restUserInfo, process.env.JWT_SECRET!, { expiresIn: '1d' });
 
-				unifiedResponseBody({ result_msg: '登录成功', result: { token }, res });
+				res.status(200).json({ result_code: 0, result_msg: '登录成功', result: { token } });
 			})();
 		} catch (error) {
-			errorHandler({ error, result_msg: '登录失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '登录失败', error });
 		}
 	};
 
@@ -156,9 +154,9 @@ class UserController {
 			}
 
 			const { password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-			unifiedResponseBody({ result_msg: '获取成功', result: { userInfo }, res });
+			res.status(200).json({ result_code: 0, result_msg: '获取成功', result: { userInfo } });
 		} catch (error) {
-			errorHandler({ error, result_msg: '获取用户信息失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '获取用户信息失败', error });
 		}
 	};
 
@@ -169,24 +167,24 @@ class UserController {
 			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
 
 			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-			unifiedResponseBody({ result_msg: '更新成功', result: { userInfo }, res });
+			res.status(200).json({ result_code: 0, result_msg: '更新成功', result: { userInfo } });
 		} catch (error) {
-			errorHandler({ error, result_msg: '用户信息更新失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '用户信息更新失败', error });
 		}
 	};
 
 	// 上传头像
 	uploadAvatar = async (req: Request, res: Response) => {
 		if (!req.file) {
-			unifiedResponseBody({ httpStatus: 400, result_code: 1, result_msg: 'No file uploaded', res });
+			res.status(400).json({ result_code: 1, result_msg: '未检测到上传文件' });
 			return;
 		}
 		const avatarPath = `${process.env.AVATAR_PATH}/${req.file.filename}`;
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
-			unifiedResponseBody({ result_msg: 'File uploaded successfully', result: { avatar: avatarPath }, res });
+			res.status(200).json({ result_code: 0, result_msg: 'File uploaded successfully', result: { avatar: avatarPath } });
 		} catch (error) {
-			errorHandler({ error, result_msg: 'File uploaded failed', res });
+			res.status(500).json({ result_code: 1, result_msg: 'File uploaded failed', error });
 		}
 	};
 
@@ -209,7 +207,8 @@ class UserController {
 		} catch (error) {
 			res.status(500).json({
 				result_code: 1,
-				result_msg: '获取失败' + error,
+				result_msg: '获取失败',
+				error,
 			});
 		}
 	};
@@ -223,7 +222,7 @@ class UserController {
 		const emailVerificationCode = this.emailCaptchaMap.get(email);
 
 		if (captcha !== emailVerificationCode) {
-			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
+			res.status(200).json({ result_code: 1, result_msg: '验证码不正确' });
 			return;
 		}
 
@@ -233,11 +232,11 @@ class UserController {
 			const userInfo = retrieveRes[0];
 			const compareRes = bcrypt.compareSync(newPassword, userInfo.password);
 			if (compareRes) {
-				unifiedResponseBody({ result_code: 1, result_msg: '新密码不能与原始密码相同', res });
+				res.status(200).json({ result_code: 1, result_msg: '新密码不能与原始密码相同' });
 				return;
 			}
 		} catch (error) {
-			errorHandler({ error, result_msg: '修改失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '修改失败', error });
 			return;
 		}
 
@@ -247,9 +246,9 @@ class UserController {
 
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ password: passwordEncrypted }, user_id]);
-			unifiedResponseBody({ result_msg: '修改成功', res });
+			res.status(200).json({ result_code: 0, result_msg: '修改成功' });
 		} catch (error) {
-			errorHandler({ error, result_msg: '修改失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '修改失败', error });
 		}
 	};
 
@@ -262,22 +261,22 @@ class UserController {
 		const { user_id } = (req as any).state.userInfo;
 
 		if (newEmail === OriginEmail) {
-			unifiedResponseBody({ result_code: 1, result_msg: '新 email 不能和原 email 相同', res });
+			res.status(200).json({ result_code: 1, result_msg: '新 email 不能和原 email 相同' });
 			return;
 		}
 
 		const emailVerificationCode = this.emailCaptchaMap.get(newEmail);
 
 		if (captcha !== emailVerificationCode) {
-			unifiedResponseBody({ result_code: 1, result_msg: '验证码不正确', res });
+			res.status(200).json({ result_code: 1, result_msg: '验证码不正确' });
 			return;
 		}
 
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ email: newEmail }, user_id]);
-			unifiedResponseBody({ result_msg: '修改成功', res });
+			res.status(200).json({ result_code: 0, result_msg: '修改成功' });
 		} catch (error) {
-			errorHandler({ error, result_msg: '修改失败', res });
+			res.status(500).json({ result_code: 1, result_msg: '修改失败', error });
 		}
 	};
 }

@@ -69,8 +69,18 @@ class ApisController {
 
 	// 更新接口
 	updateApi = async (req: AuthenticatedRequest, res: Response) => {
-		const { api_id, project_id, api_request_params, api_request_JSON, api_responses, ...apiInfo } = req.body;
+		// 说明：api_id, project_id两者是必须的，其他的参数如果没有传就不更新
+		const { api_id, project_id, api_request_params, api_request_JSON, api_responses, basic_info } = req.body;
 		try {
+			// 在修改开始前，检测有没有要修改的内容，如果没有，直接返回
+			if (!basic_info && !api_request_params && !api_request_JSON && !api_responses) {
+				res.status(200).json({
+					result_code: 1,
+					result_message: '未检测到要修改的内容',
+				});
+				return;
+			}
+
 			// 在api_version表当中插入修改的记录并获取到version_id
 			const { insertId: version_id } = await queryPromise('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
@@ -82,23 +92,25 @@ class ApisController {
 
 			// 1. 更新api_info
 			// 1.1 先获取到原本的api信息
-			const apiInfoSource = await queryPromise('SELECT * FROM apis WHERE api_id = ?', api_id);
-			const apiInfoSourceItem = apiInfoSource[0];
-			// 1.2 将原本的api信息存储到api_backup表中
-			await queryPromise('INSERT INTO api_backup SET ?', {
-				...apiInfoSourceItem,
-				version_id,
-			});
-			// 1.3 更新apis表
-			await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, version_id }, api_id]);
+			if (basic_info) {
+				const apiInfoSource = await queryPromise('SELECT * FROM apis WHERE api_id = ?', api_id);
+				const apiInfoSourceItem = apiInfoSource[0];
+				// 1.2 将原本的api信息存储到api_backup表中
+				await queryPromise('INSERT INTO api_backup SET ?', {
+					...apiInfoSourceItem,
+					version_id,
+				});
+				// 1.3 更新apis表
+				await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...basic_info, version_id }, api_id]);
 
-			version_msg += `更新了接口：${apiInfo.api_name} 的基本信息；`;
+				version_msg += `更新了接口id为：${api_id} 的基本信息；`;
+			}
 
 			// 2. 更新api_responses
 			if (api_responses) {
-				version_msg += `更新了接口：${apiInfo.api_name} 的返回响应：`;
+				version_msg += `更新了接口：${api_id} 的返回响应：`;
 				// 软删除：将delete_status改为1，版本号改为最新的
-				await queryPromise('UPDATE api_responses SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
+				await queryPromise('UPDATE api_responses SET delete_status = 1, version_id = ? WHERE api_id = ? AND delete_status = 0', [version_id, api_id]);
 				api_responses.forEach(async (item: any) => {
 					version_msg += `${item.response_name}、`;
 					await queryPromise('INSERT INTO api_responses SET ?', {
@@ -114,9 +126,13 @@ class ApisController {
 
 			// 3. 更新api_request_params
 			if (api_request_params) {
-				version_msg += `更新了接口：${apiInfo.api_name} 的请求参数：`;
-				// 软删除：将delete_status改为1，版本号改为最新的
-				await queryPromise('UPDATE request_params SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
+				version_msg += `更新了接口id为：${api_id} 的请求参数：`;
+				// 先找到目前未被软删除的请求参数，将其delete_status改为1，版本号改为最新的
+				await queryPromise('UPDATE request_params SET delete_status = 1, version_id = ? WHERE api_id = ? AND delete_status = 0', [
+					version_id,
+					api_id,
+				]);
+				// 然后再将新的请求参数插入到request_params表中
 				api_request_params.forEach((item: any) => {
 					item.params_list.forEach(async (param: any) => {
 						const paramItem = {
@@ -128,7 +144,10 @@ class ApisController {
 						};
 						if (paramItem.param_name !== '') {
 							version_msg += `${paramItem.param_name}、`;
-							await queryPromise('INSERT INTO request_params SET ?', paramItem);
+							await queryPromise('INSERT INTO request_params SET ?', {
+								...paramItem,
+								version_id,
+							});
 						}
 					});
 				});
@@ -137,9 +156,9 @@ class ApisController {
 
 			// 4. 更新api_request_JSON
 			if (api_request_JSON && api_request_JSON !== undefined) {
-				version_msg += `更新了接口：${apiInfo.api_name} 的bodyJSON；`;
+				version_msg += `更新了接口：${api_id} 的bodyJSON；`;
 				// 软删除：将delete_status改为1，版本号改为最新的
-				await queryPromise('UPDATE request_JSON SET delete_status = 1, version_id = ? WHERE api_id = ?', [version_id, api_id]);
+				await queryPromise('UPDATE request_JSON SET delete_status = 1, version_id = ? WHERE api_id = ? AND delete_status = 0', [version_id, api_id]);
 				// 去掉api_request_JSON中的\n和\t
 				const JSON_body = api_request_JSON.replace(/\n/g, '').replace(/\t/g, '');
 				await queryPromise('INSERT INTO request_JSON SET ?', {
