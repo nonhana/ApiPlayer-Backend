@@ -18,6 +18,7 @@ class ApisController {
 				user_id: req.state!.userInfo!.user_id,
 				project_id,
 				version_msg: `新增了接口。`,
+				version_type: '4', // 新增接口类型为4
 			});
 
 			// 1. 插入api_info，拿到api_id
@@ -50,6 +51,7 @@ class ApisController {
 				user_id: req.state!.userInfo!.user_id,
 				project_id,
 				version_msg: `删除了接口：${api_name} ，接口id为：${api_id} 。`,
+				version_type: '5', // 删除接口类型为5
 			});
 
 			// 软删除：把delete_status改为1，并且把version_id更新
@@ -86,9 +88,11 @@ class ApisController {
 				user_id: req.state!.userInfo!.user_id,
 				project_id,
 				version_msg: '',
+				version_type: '',
 			});
 
-			let version_msg = ''; // 在更新不同的表的时候，记录下更新了哪些内容
+			let version_msg = ''; // 在更新不同的表的时候，记录更新了哪些内容
+			let version_type = ''; // 版本更新的类型，0-接口基本信息更新；1-接口返回体更新；2-接口请求参数更新；3-接口请求体(Body-JSON)更新。如果涉及到多个内容的更新，采用'0,1,...'这样的形式进行拼接。
 
 			// 1. 更新api_info
 			// 1.1 先获取到原本的api信息
@@ -104,6 +108,7 @@ class ApisController {
 				await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...basic_info, version_id }, api_id]);
 
 				version_msg += `更新了接口id为：${api_id} 的基本信息；`;
+				version_type += '0,';
 			}
 
 			// 2. 更新api_responses
@@ -122,6 +127,7 @@ class ApisController {
 					});
 				});
 				version_msg = version_msg.substring(0, version_msg.length - 1) + '；';
+				version_type += '1,';
 			}
 
 			// 3. 更新api_request_params
@@ -152,6 +158,7 @@ class ApisController {
 					});
 				});
 				version_msg = version_msg.substring(0, version_msg.length - 1) + '；';
+				version_type += '2,';
 			}
 
 			// 4. 更新api_request_JSON
@@ -165,22 +172,25 @@ class ApisController {
 					api_id,
 					JSON_body,
 				});
+				version_type += '3,';
 			}
 
 			// 5. 更新api_version表中的version_msg
 			version_msg = version_msg.substring(0, version_msg.length - 1) + '。';
-			await queryPromise('UPDATE api_versions SET version_msg = ? WHERE version_id = ?', [version_msg, version_id]);
+			version_type = version_type.substring(0, version_type.length - 1);
+			await queryPromise('UPDATE api_versions SET version_msg = ?, version_type = ? WHERE version_id = ?', [version_msg, version_type, version_id]);
 
 			// 6. 返回结果
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'update api success',
+				result_msg: '更新接口成功',
 				api_id,
 			});
-		} catch (error: any) {
+		} catch (error) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: '更新接口失败',
+				error,
 			});
 		}
 	};

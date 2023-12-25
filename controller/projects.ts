@@ -732,51 +732,120 @@ class ProjectsController {
 
 	// 回滚某个项目的历史记录
 	rollback = async (req: Request, res: Response) => {
-		const { version_id } = req.body;
+		const { version_id, project_id } = req.body;
 		try {
+			// 从api_versions表中根据version_id拿到version_type
+			// version_type为版本更新的类型，0-接口基本信息更新；1-接口返回体更新；2-接口请求参数更新；3-接口请求体(Body-JSON)更新。如果涉及到多个内容的更新，采用'0,1,...'这样的形式进行拼接。
+			// 目前version_type为4或者5不支持回滚功能。
+			const version_type = (await queryPromise('SELECT version_type FROM api_versions WHERE version_id = ?', version_id))[0].version_type.split(
+				','
+			) as string[];
+
+			if (version_type.includes('4') || version_type.includes('5')) {
+				res.status(200).json({
+					result_code: 1,
+					result_msg: '这个版本不支持回滚',
+				});
+				return;
+			}
+
 			// 1. 回滚api_info
-			// 1.1 从api_backup中拿到对应的version_id的api_info
-			const targetApiInfo = await queryPromise('SELECT * FROM api_backup WHERE version_id = ?', version_id);
-			if (targetApiInfo.length > 0) {
-				// 1.2 剔除掉backup_id、api_id、project_id、version_id、api_createdAt、api_editedAt、delete_status属性，拿到对应的api_id，然后更新apis表中对应的api
-				const apiInfo = JSON.parse(JSON.stringify(targetApiInfo[0]));
-				delete apiInfo.backup_id;
-				delete apiInfo.api_id;
-				delete apiInfo.project_id;
-				delete apiInfo.version_id;
-				delete apiInfo.api_createdAt;
-				delete apiInfo.api_editedAt;
-				delete apiInfo.delete_status;
-				await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [apiInfo, targetApiInfo[0].api_id]);
-				// 1.3 把api_backup表中对应的version_id的记录删除
-				await queryPromise('DELETE FROM api_backup WHERE version_id = ?', version_id);
+			if (version_type.includes('0')) {
+				// 1.1 从api_backup中拿到对应的version_id的api_info
+				const targetApiInfo = await queryPromise('SELECT * FROM api_backup WHERE version_id = ?', version_id);
+				if (targetApiInfo.length > 0) {
+					// 1.2 从api_version中拿到version_type包含0的除了目前这个最近的一个版本的version_id
+					let lastVersionId: number | null = null;
+					const versionIdList = await queryPromise(
+						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%0%" ORDER BY createdAt DESC',
+						[project_id]
+					);
+					if (versionIdList.length > 1) {
+						lastVersionId = versionIdList[1].version_id;
+					}
+
+					// 1.3 剔除掉backup_id、api_id、project_id、version_id、api_createdAt、api_editedAt、delete_status属性，拿到对应的api_id，然后更新apis表中对应的api
+					const apiInfo = JSON.parse(JSON.stringify(targetApiInfo[0]));
+					delete apiInfo.backup_id;
+					delete apiInfo.api_id;
+					delete apiInfo.project_id;
+					delete apiInfo.version_id;
+					delete apiInfo.api_createdAt;
+					delete apiInfo.api_editedAt;
+					delete apiInfo.delete_status;
+					await queryPromise('UPDATE apis SET ? WHERE api_id = ?', [{ ...apiInfo, version_id: lastVersionId }, targetApiInfo[0].api_id]);
+					// 1.4 把api_backup表中对应的version_id的记录删除
+					await queryPromise('DELETE FROM api_backup WHERE version_id = ?', version_id);
+				}
 			}
 
-			// 2. 回滚api_request_params
-			const targetRequestParams = await queryPromise('SELECT * FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
-			if (targetRequestParams.length > 0) {
-				// 2.1 把request_params表中对应的version_id的delete_status为0的记录删除
-				await queryPromise('DELETE FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
-				// 2.2 把request_params表中对应的version_id的delete_status为1的记录的delete_status改为0
-				await queryPromise('UPDATE request_params SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			// 2. 回滚api_responses
+			if (version_type.includes('1')) {
+				const targetResponses = await queryPromise('SELECT * FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
+				if (targetResponses.length > 0) {
+					// 2.1 把api_responses表中对应的version_id的delete_status为0的记录删除
+					await queryPromise('DELETE FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
+					// 2.2 从api_version中拿到version_type包含1的除了目前这个最近的一个版本的version_id
+					let lastVersionId: number | null = null;
+					const versionIdList = await queryPromise(
+						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%1%" ORDER BY createdAt DESC',
+						[project_id]
+					);
+					if (versionIdList.length > 1) {
+						lastVersionId = versionIdList[1].version_id;
+					}
+					// 2.3 把api_responses表中对应的version_id的delete_status为1的记录的delete_status改为0，version_id改为lastVersionId
+					await queryPromise('UPDATE api_responses SET delete_status = 0, version_id = ? WHERE version_id = ? AND delete_status = 1', [
+						lastVersionId,
+						version_id,
+					]);
+				}
 			}
 
-			// 3. 回滚api_request_JSON
-			const targetRequestJSON = await queryPromise('SELECT * FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
-			if (targetRequestJSON.length > 0) {
-				// 3.1 把request_JSON表中对应的version_id的delete_status为0的记录删除
-				await queryPromise('DELETE FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
-				// 3.2 把request_JSON表中对应的version_id的delete_status为1的记录的delete_status改为0
-				await queryPromise('UPDATE request_JSON SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			// 3. 回滚api_request_params
+			if (version_type.includes('2')) {
+				const targetRequestParams = await queryPromise('SELECT * FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
+				if (targetRequestParams.length > 0) {
+					// 3.1 把request_params表中对应的version_id的delete_status为0的记录删除
+					await queryPromise('DELETE FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
+					// 3.2 从api_version中拿到version_type包含2的除了目前这个最近的一个版本的version_id
+					let lastVersionId: number | null = null;
+					const versionIdList = await queryPromise(
+						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%2%" ORDER BY createdAt DESC',
+						[project_id]
+					);
+					if (versionIdList.length > 1) {
+						lastVersionId = versionIdList[1].version_id;
+					}
+					// 3.2 把request_params表中对应的version_id的delete_status为1的记录的delete_status改为0
+					await queryPromise('UPDATE request_params SET delete_status = 0, version_id = ? WHERE version_id = ? AND delete_status = 1', [
+						lastVersionId,
+						version_id,
+					]);
+				}
 			}
 
-			// 4. 回滚api_responses
-			const targetResponses = await queryPromise('SELECT * FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
-			if (targetResponses.length > 0) {
-				// 4.1 把api_responses表中对应的version_id的delete_status为0的记录删除
-				await queryPromise('DELETE FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
-				// 4.2 把api_responses表中对应的version_id的delete_status为1的记录的delete_status改为0
-				await queryPromise('UPDATE api_responses SET delete_status = 0 WHERE version_id = ? AND delete_status = 1', version_id);
+			// 4. 回滚api_request_JSON
+			if (version_type.includes('3')) {
+				const targetRequestJSON = await queryPromise('SELECT * FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
+				if (targetRequestJSON.length > 0) {
+					// 4.1 把request_JSON表中对应的version_id的delete_status为0的记录删除
+					await queryPromise('DELETE FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
+					// 4.2 从api_version中拿到version_type包含3的除了目前这个最近的一个版本的version_id
+					let lastVersionId: number | null = null;
+					const versionIdList = await queryPromise(
+						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%3%" ORDER BY createdAt DESC',
+						[project_id]
+					);
+					if (versionIdList.length > 1) {
+						lastVersionId = versionIdList[1].version_id;
+					}
+					// 4.2 把request_JSON表中对应的version_id的delete_status为1的记录的delete_status改为0
+					await queryPromise('UPDATE request_JSON SET delete_status = 0, version_id = ? WHERE version_id = ? AND delete_status = 1', [
+						lastVersionId,
+						version_id,
+					]);
+				}
 			}
 
 			// 5. 删除api_versions表中对应的version_id的记录
