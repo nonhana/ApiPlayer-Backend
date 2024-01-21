@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
-import { AuthenticatedRequest } from '../middleware/user.middleware';
-import { queryPromise } from '../utils/index';
+import { AuthenticatedRequest } from '../../middleware/user.middleware';
+import { queryPromise } from '../../utils';
 import axios from 'axios';
 import type { AxiosRequestConfig } from 'axios';
 import qs from 'qs';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 class ApisController {
@@ -30,13 +31,13 @@ class ApisController {
 			// 2. 返回结果
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'add api success',
+				result_msg: 'add api success',
 				api_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
@@ -59,12 +60,12 @@ class ApisController {
 
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'delete api success',
+				result_msg: 'delete api success',
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
@@ -78,7 +79,7 @@ class ApisController {
 			if (!basic_info && !api_request_params && !api_request_JSON && !api_responses) {
 				res.status(200).json({
 					result_code: 1,
-					result_message: '未检测到要修改的内容',
+					result_msg: '未检测到要修改的内容',
 				});
 				return;
 			}
@@ -208,7 +209,7 @@ class ApisController {
 			if (delete_status === 1) {
 				res.status(200).json({
 					result_code: 1,
-					result_message: 'api has been deleted',
+					result_msg: 'api has been deleted',
 				});
 				return;
 			}
@@ -268,23 +269,23 @@ class ApisController {
 
 			res.status(200).json({
 				result_code: 0,
-				result_message: 'get api detail success',
+				result_msg: 'get api detail success',
 				api_info: result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};
 
 	/**
 	 * 运行API
-	 * 具体的规则：
-	 * 1. 先获取到传过来的api_id，获取到这个api的method、url等相关信息
-	 * 2. 然后接收传过来的参数
-	 * 3. 最后将参数解析完成之后，用axios来发送请求
+	 * > 具体的规则：
+	 * > 1. 先获取到传过来的api_id，获取到这个api的method、url等相关信息
+	 * > 2. 然后接收传过来的参数
+	 * > 3. 最后将参数解析完成之后，用axios来发送请求
 	 */
 	runApi = async (req: Request, res: Response): Promise<void> => {
 		const { api_id, api_request_params, api_request_JSON } = req.body;
@@ -433,7 +434,7 @@ class ApisController {
 				// 6. 将结果返回
 				res.status(200).json({
 					result_code: 0,
-					result_message: 'api run success',
+					result_msg: 'api run success',
 					sourceConfig: axiosConfig,
 					data: response,
 				});
@@ -457,7 +458,7 @@ class ApisController {
 				const response = (await axios(axiosConfig)).data;
 				res.status(200).json({
 					result_code: 0,
-					result_message: 'api run success',
+					result_msg: 'api run success',
 					sourceConfig: axiosConfig,
 					data: response,
 				});
@@ -465,7 +466,7 @@ class ApisController {
 		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_message: error.message || 'An error occurred',
+				result_msg: error.message || 'An error occurred',
 			});
 		}
 	};

@@ -1,8 +1,21 @@
 import { Request, Response } from 'express';
-import { queryPromise } from '../utils/index';
+import { queryPromise } from '../../utils';
 import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import type { AuthenticatedRequest } from '../../middleware/user.middleware';
+import type {
+	SendCaptchaReqBody,
+	RegisterReqBody,
+	LoginReqBody,
+	UsersTable,
+	ModifyUserInfoReqBody,
+	SearchUserReqBody,
+	ModifyPasswordReqBody,
+	ModifyEmailReqBody,
+} from './types';
+import type { UserId } from '../types';
+import type { OkPacket } from 'mysql';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -17,7 +30,7 @@ class UserController {
 
 	// 发送验证码
 	sendCaptcha = async (req: Request, res: Response) => {
-		const { email } = req.body;
+		const { email } = req.body as SendCaptchaReqBody;
 
 		// 生成随机的 6 位数的数字验证码
 		const verificationCode = String(1e5 + Math.floor(Math.random() * 1e5 * 9));
@@ -47,29 +60,21 @@ class UserController {
 		};
 
 		// 发送电子邮件
-		transporter.sendMail(
-			mailOptions,
-			(
-				error?: unknown,
-				info?: {
-					response?: string;
-				}
-			) => {
-				if (error) {
-					res.status(500).json({ result_code: 1, result_msg: '发送验证码失败' });
-				} else {
-					res.status(200).json({ result_code: 0, result_msg: '验证码已发送' });
-				}
+		transporter.sendMail(mailOptions, (error?: unknown) => {
+			if (error) {
+				res.status(500).json({ result_code: 1, result_msg: '发送验证码失败' });
+			} else {
+				res.status(200).json({ result_code: 0, result_msg: '验证码已发送' });
 			}
-		);
+		});
 	};
 
 	// 注册
 	register = async (req: Request, res: Response) => {
-		const { email, captcha, password } = req.body;
+		const { email, captcha, password } = req.body as RegisterReqBody;
 
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
+			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length > 0) {
 				res.status(200).json({ result_code: 1, result_msg: '该 email 已存在' });
@@ -93,9 +98,12 @@ class UserController {
 
 		try {
 			// 注册的时候拿到 new_user_id和username
-			const { insertId: new_user_id } = await queryPromise('INSERT INTO users (email, password) VALUES (?, ?)', [email, passwordEncrypted]);
-			const { username } = await queryPromise('SELECT username FROM users WHERE user_id = ?', new_user_id);
-			const { insertId: new_team_id } = await queryPromise('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', ['PersonalTeam', '个人团队']);
+			const { insertId: new_user_id } = await queryPromise<OkPacket>('INSERT INTO users (email, password) VALUES (?, ?)', [email, passwordEncrypted]);
+			const { username } = await queryPromise<{ username: string }>('SELECT username FROM users WHERE user_id = ?', new_user_id);
+			const { insertId: new_team_id } = await queryPromise<OkPacket>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [
+				'PersonalTeam',
+				'个人团队',
+			]);
 			await queryPromise('INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (?, ?, ?, ?)', [
 				new_user_id,
 				new_team_id,
@@ -111,13 +119,13 @@ class UserController {
 
 	// 登录
 	login = async (req: Request, res: Response) => {
-		const { email, password } = req.body;
+		const { email, password } = req.body as LoginReqBody;
 
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE email = ?', email);
+			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE email = ?', email);
 
 			if (retrieveRes.length === 0) {
-				res.status(200).json({ result_code: 1, result_msg: '该 email 不存在' });
+				res.status(200).json({ result_code: 1, result_msg: '这个 email 不存在，请先进行注册' });
 				return;
 			}
 
@@ -135,7 +143,7 @@ class UserController {
 				// 根据 id, email, username, introduce, avatar 生成token
 				const token = jwt.sign(restUserInfo, process.env.JWT_SECRET!, { expiresIn: '1d' });
 
-				res.status(200).json({ result_code: 0, result_msg: '登录成功', result: { token } });
+				res.status(200).json({ result_code: 0, result_msg: '登录成功', result: token });
 			})();
 		} catch (error) {
 			res.status(500).json({ result_code: 1, result_msg: '登录失败', error });
@@ -143,46 +151,47 @@ class UserController {
 	};
 
 	// 获取用户信息
-	info = async (req: Request, res: Response) => {
-		const { user_id: origin_user_id } = req.query;
+	info = async (req: AuthenticatedRequest, res: Response) => {
+		const { user_id } = req.query as unknown as UserId;
 		try {
-			let retrieveRes: any = null;
-			if (origin_user_id) {
-				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', origin_user_id);
+			let retrieveRes: UsersTable[] = [];
+			if (user_id) {
+				retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', user_id);
 			} else {
-				retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+				retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', req.state!.userInfo.user_id);
 			}
 
 			const { password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-			res.status(200).json({ result_code: 0, result_msg: '获取成功', result: { userInfo } });
+			res.status(200).json({ result_code: 0, result_msg: '获取成功', result: userInfo });
 		} catch (error) {
 			res.status(500).json({ result_code: 1, result_msg: '获取用户信息失败', error });
 		}
 	};
 
 	// 更新用户信息
-	updateInfo = async (req: Request, res: Response) => {
+	updateInfo = async (req: AuthenticatedRequest, res: Response) => {
+		const info = req.body as ModifyUserInfoReqBody;
 		try {
-			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [req.body, (req as any).state.userInfo.user_id]);
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', (req as any).state.userInfo.user_id);
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [info, req.state!.userInfo.user_id]);
+			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', req.state!.userInfo.user_id);
 
 			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
-			res.status(200).json({ result_code: 0, result_msg: '更新成功', result: { userInfo } });
+			res.status(200).json({ result_code: 0, result_msg: '更新成功', result: userInfo });
 		} catch (error) {
 			res.status(500).json({ result_code: 1, result_msg: '用户信息更新失败', error });
 		}
 	};
 
 	// 上传头像
-	uploadAvatar = async (req: Request, res: Response) => {
+	uploadAvatar = async (req: AuthenticatedRequest, res: Response) => {
 		if (!req.file) {
 			res.status(400).json({ result_code: 1, result_msg: '未检测到上传文件' });
 			return;
 		}
 		const avatarPath = `${process.env.AVATAR_PATH}/${req.file.filename}`;
 		try {
-			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, (req as any).state.userInfo.user_id]);
-			res.status(200).json({ result_code: 0, result_msg: 'File uploaded successfully', result: { avatar: avatarPath } });
+			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [{ avatar: avatarPath }, req.state!.userInfo.user_id]);
+			res.status(200).json({ result_code: 0, result_msg: 'File uploaded successfully', result: avatarPath });
 		} catch (error) {
 			res.status(500).json({ result_code: 1, result_msg: 'File uploaded failed', error });
 		}
@@ -190,11 +199,11 @@ class UserController {
 
 	// 根据用户名搜索用户
 	searchUser = async (req: Request, res: Response) => {
-		const { username } = req.query;
+		const { username } = req.query as unknown as SearchUserReqBody;
 		try {
-			const usersSource = await queryPromise('SELECT user_id, username, avatar, email, introduce FROM users WHERE username LIKE ?', `%${username}%`);
+			const usersSource = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE username LIKE ?', `%${username}%`);
 
-			const retrieveRes = usersSource.map((user: any) => {
+			const retrieveRes = usersSource.map((user) => {
 				const { password, createdAt, updatedAt, ...userInfo } = user;
 				return userInfo;
 			});
@@ -202,7 +211,7 @@ class UserController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: '获取成功',
-				user_list: retrieveRes,
+				result: retrieveRes,
 			});
 		} catch (error) {
 			res.status(500).json({
@@ -214,10 +223,10 @@ class UserController {
 	};
 
 	// 修改密码
-	changePassword = async (req: Request, res: Response) => {
-		const { captcha, newPassword } = req.body;
+	changePassword = async (req: AuthenticatedRequest, res: Response) => {
+		const { captcha, newPassword } = req.body as ModifyPasswordReqBody;
 
-		const { email, user_id } = (req as any).state.userInfo;
+		const { email, user_id } = req.state!.userInfo;
 
 		const emailVerificationCode = this.emailCaptchaMap.get(email);
 
@@ -227,7 +236,7 @@ class UserController {
 		}
 
 		try {
-			const retrieveRes = await queryPromise('SELECT * FROM users WHERE user_id = ?', user_id);
+			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', user_id);
 
 			const userInfo = retrieveRes[0];
 			const compareRes = bcrypt.compareSync(newPassword, userInfo.password);
@@ -253,14 +262,14 @@ class UserController {
 	};
 
 	// 修改 email
-	changeEmail = async (req: Request, res: Response) => {
-		const { newEmail, captcha } = req.body;
+	changeEmail = async (req: AuthenticatedRequest, res: Response) => {
+		const { newEmail, captcha } = req.body as ModifyEmailReqBody;
 
-		const OriginEmail = (req as any).state.userInfo.email;
+		const originEmail = req.state!.userInfo.email;
 
-		const { user_id } = (req as any).state.userInfo;
+		const { user_id } = req.state!.userInfo;
 
-		if (newEmail === OriginEmail) {
+		if (newEmail === originEmail) {
 			res.status(200).json({ result_code: 1, result_msg: '新 email 不能和原 email 相同' });
 			return;
 		}

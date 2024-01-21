@@ -1,12 +1,15 @@
 import { body, Meta } from 'express-validator';
 
-const atLeastOneParamExists = (input: any, { req }: Meta) => {
-	if (Object.keys(req.body ?? {}).length === 0) {
-		throw new Error('至少包含一个参数');
+const atLeastOneOf = (params: string[], _: any, { req }: Meta) => {
+	const body = req.body ?? {};
+	const hasAtLeastOneParam = params.some((param) => param in body);
+	if (!hasAtLeastOneParam) {
+		throw new Error('At least one of the specified parameters is required');
 	}
 	return true;
 };
 
+// 验证用户相关的参数
 export const usersValidator = {
 	['send-captcha']: [body('email').isEmail()],
 	['register']: [
@@ -17,7 +20,11 @@ export const usersValidator = {
 		body('password').isString().notEmpty(),
 	],
 	['login']: [body('email').isEmail(), body('password').isString().notEmpty()],
-	['update-info']: [body('username').isString().optional(), body('introduce').isString().optional(), body().custom(atLeastOneParamExists)],
+	['update-info']: [
+		body('username').isString().optional(),
+		body('introduce').isString().optional(),
+		body().custom(atLeastOneOf.bind(null, ['username', 'introduce'])),
+	],
 	['change-password']: [
 		body('captcha')
 			.isString()

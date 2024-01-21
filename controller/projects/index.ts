@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { queryPromise } from '../utils/index';
+import { queryPromise } from '../../utils';
 import type { OkPacket } from 'mysql';
-import type { ApiListItem } from '../utils/types';
+import type { ApiListItem } from '../../utils/types';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { JSONSchemaFaker } from 'json-schema-faker';

@@ -11,7 +11,7 @@ export const getMissingParam = (requireParams: string[], paramsFromClient: objec
 };
 
 // 使用Promise封装数据库查询，方便使用async/await来取出查询结果
-export const queryPromise = (options: string | QueryOptions, values?: any): Promise<any> => {
+export const queryPromise = <T>(options: string | QueryOptions, values?: any): Promise<T> => {
 	return new Promise((resolve, reject) => {
 		if (values) {
 			db.query(options, values, (error, result) => {
