@@ -5,7 +5,7 @@
 /**
  * 发送验证码请求体
  */
-export interface SendCaptchaReqBody {
+export interface SendCaptchaReq {
 	/**
 	 * 邮箱地址
 	 */
@@ -14,7 +14,7 @@ export interface SendCaptchaReqBody {
 /**
  * 注册请求体
  */
-export interface RegisterReqBody {
+export interface RegisterReq {
 	/**
 	 * 邮箱地址
 	 */
@@ -31,7 +31,7 @@ export interface RegisterReqBody {
 /**
  * 登录请求体
  */
-export interface LoginReqBody {
+export interface LoginReq {
 	/**
 	 * 邮箱地址
 	 */
@@ -44,7 +44,7 @@ export interface LoginReqBody {
 /**
  * 修改用户信息请求体
  */
-export interface ModifyUserInfoReqBody {
+export interface ModifyUserInfoReq {
 	/**
 	 * 用户名
 	 */
@@ -61,7 +61,7 @@ export interface ModifyUserInfoReqBody {
 /**
  * 搜索用户请求体
  */
-export interface SearchUserReqBody {
+export interface SearchUserReq {
 	/**
 	 * 用户名
 	 */
@@ -70,7 +70,7 @@ export interface SearchUserReqBody {
 /**
  * 修改密码请求体
  */
-export interface ModifyPasswordReqBody {
+export interface ModifyPasswordReq {
 	/**
 	 * 验证码
 	 */
@@ -83,7 +83,7 @@ export interface ModifyPasswordReqBody {
 /**
  * 修改邮箱请求体
  */
-export interface ModifyEmailReqBody {
+export interface ModifyEmailReq {
 	/**
 	 * 验证码
 	 */
@@ -92,45 +92,4 @@ export interface ModifyEmailReqBody {
 	 * 新邮箱地址
 	 */
 	newEmail: string;
-}
-
-/* ----------返回数据体定义---------- */
-
-/* ----------数据库表定义---------- */
-/**
- * 用户表
- */
-export interface UsersTable {
-	/**
-	 * 用户id
-	 */
-	user_id: number;
-	/**
-	 * 用户名
-	 */
-	username: string;
-	/**
-	 * 密码
-	 */
-	password: string;
-	/**
-	 * 邮箱地址
-	 */
-	email: string;
-	/**
-	 * 用户介绍
-	 */
-	introduce: string;
-	/**
-	 * 用户头像
-	 */
-	avatar: string;
-	/**
-	 * 创建时间
-	 */
-	createdAt: string;
-	/**
-	 * 更新时间
-	 */
-	updatedAt: string;
 }

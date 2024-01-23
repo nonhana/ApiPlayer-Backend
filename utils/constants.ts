@@ -8,3 +8,21 @@ export enum ProjectPermission {
 	READER = 2,
 	FORBIDDEN = 3,
 }
+
+// 项目开发环境枚举：0-开发环境，1-测试环境，2-正式环境，3-mock.js环境
+export enum ProjectEnv {
+	DEV = 0,
+	TEST = 1,
+	PROD = 2,
+	MOCK = 3,
+}
+
+// 版本更新的类型枚举。0-接口基本信息更新，1-接口返回体更新，2-接口请求参数更新，3-接口请求体(Body-JSON)更新，4-新增接口，5-删除接口。
+export enum VersionUpdateType {
+	BASIC = '0',
+	RES = '1',
+	PARAMS = '2',
+	BODY = '3',
+	ADD = '4',
+	DELETE = '5',
+}

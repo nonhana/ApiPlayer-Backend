@@ -7,11 +7,11 @@ import type {
 	TeamMemberItem,
 	TeamProjectItem,
 	TeamProjectMemberItem,
-	CreateTeamReqBody,
-	UpdateTeamInfoReqBody,
-	InviteUserReqBody,
-	SetMemberIdentityReqBody,
-	RemoveMemberReqBody,
+	CreateTeamReq,
+	UpdateTeamInfoReq,
+	InviteUserReq,
+	SetMemberIdentityReq,
+	RemoveMemberReq,
 } from './types';
 import type { OkPacket } from 'mysql';
 import { ProjectPermission } from '../../utils/constants';
@@ -99,9 +99,11 @@ class TeamController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get team info success',
-				member_list: memberListFormatted,
-				project_list: projectListFormatted,
-				team_info: teamInfo,
+				result: {
+					member_list: memberListFormatted,
+					project_list: projectListFormatted,
+					team_info: teamInfo,
+				},
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -113,7 +115,7 @@ class TeamController {
 
 	// 新建团队
 	addTeam = async (req: AuthenticatedRequest, res: Response) => {
-		const { team_name, team_desc, team_user_name } = req.body as CreateTeamReqBody;
+		const { team_name, team_desc, team_user_name } = req.body as CreateTeamReq;
 		try {
 			const { insertId } = await queryPromise<OkPacket>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [team_name, team_desc]);
 
@@ -155,7 +157,7 @@ class TeamController {
 
 	// 更新团队信息
 	updateTeam = async (req: Request, res: Response) => {
-		const { team_id, user_id, team_user_name, ...teamInfo } = req.body as UpdateTeamInfoReqBody;
+		const { team_id, user_id, team_user_name, ...teamInfo } = req.body as UpdateTeamInfoReq;
 		try {
 			if (Object.keys(teamInfo).length > 0) {
 				await queryPromise('UPDATE teams SET ? WHERE team_id = ?', [teamInfo, team_id]);
@@ -177,7 +179,7 @@ class TeamController {
 
 	// 邀请用户加入团队
 	inviteUser = async (req: Request, res: Response) => {
-		const { team_id, user_id, team_user_name } = req.body as InviteUserReqBody;
+		const { team_id, user_id, team_user_name } = req.body as InviteUserReq;
 		try {
 			// 1. 先加到团队里面
 			// 默认身份：3-游客。成员身份一览：0-团队所有者，1-团队管理者，2-团队成员，3-游客
@@ -213,7 +215,7 @@ class TeamController {
 
 	// 设置成员权限
 	setMemberIdentity = async (req: Request, res: Response) => {
-		const { team_id, user_id, team_project_indentity_list, ...teamInfo } = req.body as SetMemberIdentityReqBody;
+		const { team_id, user_id, team_project_indentity_list, ...teamInfo } = req.body as SetMemberIdentityReq;
 		try {
 			await queryPromise('UPDATE team_members SET ? WHERE team_id = ? AND user_id = ?', [teamInfo, , team_id, user_id]);
 
@@ -242,7 +244,7 @@ class TeamController {
 
 	// 移除某成员
 	removeMember = async (req: Request, res: Response) => {
-		const { team_id, user_id } = req.body as RemoveMemberReqBody;
+		const { team_id, user_id } = req.body as RemoveMemberReq;
 		try {
 			await queryPromise('DELETE FROM team_members WHERE team_id = ? AND user_id = ? AND team_user_identity != 0', [team_id, user_id]);
 			res.status(200).json({

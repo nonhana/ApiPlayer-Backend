@@ -4,16 +4,8 @@ import nodemailer from 'nodemailer';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import type { AuthenticatedRequest } from '../../middleware/user.middleware';
-import type {
-	SendCaptchaReqBody,
-	RegisterReqBody,
-	LoginReqBody,
-	UsersTable,
-	ModifyUserInfoReqBody,
-	SearchUserReqBody,
-	ModifyPasswordReqBody,
-	ModifyEmailReqBody,
-} from './types';
+import type { SendCaptchaReq, RegisterReq, LoginReq, ModifyUserInfoReq, SearchUserReq, ModifyPasswordReq, ModifyEmailReq } from './types';
+import type { UsersTable } from '../types';
 import type { UserId } from '../types';
 import type { OkPacket } from 'mysql';
 import dotenv from 'dotenv';
@@ -30,7 +22,7 @@ class UserController {
 
 	// 发送验证码
 	sendCaptcha = async (req: Request, res: Response) => {
-		const { email } = req.body as SendCaptchaReqBody;
+		const { email } = req.body as SendCaptchaReq;
 
 		// 生成随机的 6 位数的数字验证码
 		const verificationCode = String(1e5 + Math.floor(Math.random() * 1e5 * 9));
@@ -71,7 +63,7 @@ class UserController {
 
 	// 注册
 	register = async (req: Request, res: Response) => {
-		const { email, captcha, password } = req.body as RegisterReqBody;
+		const { email, captcha, password } = req.body as RegisterReq;
 
 		try {
 			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE email = ?', email);
@@ -119,7 +111,7 @@ class UserController {
 
 	// 登录
 	login = async (req: Request, res: Response) => {
-		const { email, password } = req.body as LoginReqBody;
+		const { email, password } = req.body as LoginReq;
 
 		try {
 			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE email = ?', email);
@@ -170,7 +162,7 @@ class UserController {
 
 	// 更新用户信息
 	updateInfo = async (req: AuthenticatedRequest, res: Response) => {
-		const info = req.body as ModifyUserInfoReqBody;
+		const info = req.body as ModifyUserInfoReq;
 		try {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [info, req.state!.userInfo.user_id]);
 			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', req.state!.userInfo.user_id);
@@ -199,7 +191,7 @@ class UserController {
 
 	// 根据用户名搜索用户
 	searchUser = async (req: Request, res: Response) => {
-		const { username } = req.query as unknown as SearchUserReqBody;
+		const { username } = req.query as unknown as SearchUserReq;
 		try {
 			const usersSource = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE username LIKE ?', `%${username}%`);
 
@@ -224,7 +216,7 @@ class UserController {
 
 	// 修改密码
 	changePassword = async (req: AuthenticatedRequest, res: Response) => {
-		const { captcha, newPassword } = req.body as ModifyPasswordReqBody;
+		const { captcha, newPassword } = req.body as ModifyPasswordReq;
 
 		const { email, user_id } = req.state!.userInfo;
 
@@ -263,7 +255,7 @@ class UserController {
 
 	// 修改 email
 	changeEmail = async (req: AuthenticatedRequest, res: Response) => {
-		const { newEmail, captcha } = req.body as ModifyEmailReqBody;
+		const { newEmail, captcha } = req.body as ModifyEmailReq;
 
 		const originEmail = req.state!.userInfo.email;
 

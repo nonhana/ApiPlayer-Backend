@@ -1,45 +1,56 @@
 import { Request, Response } from 'express';
 import { queryPromise } from '../../utils';
 import type { OkPacket } from 'mysql';
-import type { ApiListItem } from '../../utils/types';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { JSONSchemaFaker } from 'json-schema-faker';
+import type { AuthenticatedRequest } from '../../middleware/user.middleware';
+import type {
+	ProjectId,
+	CreateProjectReq,
+	ProjectItem,
+	AddDictionaryReq,
+	UpdateDictionaryReq,
+	DictionaryId,
+	UpdateProjectInfoReq,
+	EnvListItem,
+	UpdateProjectGlobalInfoReq,
+	UserInfo,
+	RollbackReq,
+} from './types';
+import type {
+	ApiListItem,
+	ApiRequestParam,
+	ApiResponse,
+	RecentlyVisitedTable,
+	DistionarieTable,
+	ApisTable,
+	ProjectsTable,
+	GlobalParamsTable,
+	GlobalVariablesTable,
+	VersionsTable,
+	ApiBackupTable,
+	ApiResponsesTable,
+	ApiRequestParamsTable,
+	ApiRequestJSONTable,
+} from '../types';
+import { ProjectPermission, ProjectEnv } from '../../utils/constants';
 import dotenv from 'dotenv';
-
 dotenv.config();
 
-interface ApiRequestParam {
-	/**
-	 * 0-Params，1-Body(form-data)，2-Body(x-www-form-unlencoded)，3-Cookie，4-Header
-	 */
-	type: number;
-	params_list?: ParamsList[];
-}
-interface ParamsList {
-	param_desc: string;
-	param_name: string;
-	param_type: number;
-}
-interface ApiResponse {
-	http_status: number;
-	response_body: string;
-	response_name: string;
-}
-
 class ProjectsController {
-	// 上传项目图标。只保存，不更新数据库
+	// 上传项目图标。这个函数只保存并返回保存地址，不更新数据库
 	uploadProjectIcon = (req: Request, res: Response) => {
 		if (!req.file) {
-			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
+			res.status(400).json({ result_code: 1, result_msg: 'No file detected' });
 			return;
 		}
-		const projectIconPath = `${process.env.PROJECT_ICON_PATH}/${req.file.filename}`;
+		const result = `${process.env.PROJECT_ICON_PATH}/${req.file.filename}`;
 		try {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'File uploaded successfully',
-				project_icon_path: projectIconPath,
+				result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -51,36 +62,33 @@ class ProjectsController {
 
 	// 新建项目
 	addProject = async (req: Request, res: Response) => {
-		const { user_id, team_id, ...projectInfo } = req.body;
+		const { team_id, ...projectInfo } = req.body as CreateProjectReq;
 		try {
 			// 1. 先插入项目信息，获取到新的项目信息
-			const sql = 'INSERT INTO projects SET ?';
-			const projectResult: OkPacket = await queryPromise(sql, { ...projectInfo, team_id });
+			const { insertId } = await queryPromise<OkPacket>('INSERT INTO projects SET ?', { ...projectInfo, team_id });
 
 			// 2. 再插入项目成员信息，将这个队伍里面的所有成员都加入到这个项目的成员列表里面
-			const sql2 = 'SELECT user_id FROM team_members WHERE team_id = ?';
-			const userList = await queryPromise(sql2, team_id);
+			const userList = await queryPromise<{ user_id: string }[]>('SELECT user_id FROM team_members WHERE team_id = ?', team_id);
 			if (userList.length > 0) {
-				userList.forEach(async (item: any) => {
+				userList.forEach(async (item) => {
 					await queryPromise('INSERT INTO projects_users SET ?', {
 						user_id: item.user_id,
-						project_id: projectResult.insertId,
-						project_user_identity: 3,
+						project_id: insertId,
+						project_user_identity: ProjectPermission.FORBIDDEN,
 					});
 				});
 			}
 
 			// 3. 新建这个项目的接口根目录
-			const sql3 = 'INSERT INTO dictionaries SET ?';
-			await queryPromise(sql3, { project_id: projectResult.insertId, dictionary_name: '根目录' });
+			await queryPromise('INSERT INTO dictionaries SET ?', { project_id: insertId, dictionary_name: '根目录' });
 
 			// 4. 预置这个项目的环境：0~3：开发环境、测试环境、正式环境、mock.js环境
 			for (let i = 0; i < 3; i++) {
-				await queryPromise('INSERT INTO project_env (project_id, env_type) VALUES (?, ?) ', [projectResult.insertId, i]);
+				await queryPromise('INSERT INTO project_env (project_id, env_type) VALUES (?, ?) ', [insertId, i]);
 			}
 			await queryPromise('INSERT INTO project_env (project_id, env_type, env_baseurl) VALUES (?, ?, ?) ', [
-				projectResult.insertId,
-				3,
+				insertId,
+				ProjectEnv.MOCK,
 				process.env.MOCK_URL,
 			]);
 
@@ -97,20 +105,23 @@ class ProjectsController {
 	};
 
 	// 添加某用户最近访问的项目记录
-	addRecentProject = async (req: Request, res: Response) => {
-		const { user_id, project_id } = req.body;
+	addRecentProject = async (req: AuthenticatedRequest, res: Response) => {
+		const { project_id } = req.body as ProjectId;
 		try {
 			// 先查询是否存在
-			const sql = 'SELECT * FROM recently_visited WHERE user_id = ? AND project_id = ?';
-			const result = await queryPromise(sql, [user_id, project_id]);
+			const result = await queryPromise<RecentlyVisitedTable[]>('SELECT * FROM recently_visited WHERE user_id = ? AND project_id = ?', [
+				req.state!.userInfo.user_id,
+				project_id,
+			]);
 			if (result.length) {
 				// 如果存在，更新访问时间
-				const sql2 = 'UPDATE recently_visited SET last_access_time = NOW() WHERE user_id = ? AND project_id = ?';
-				await queryPromise(sql2, [user_id, project_id]);
+				await queryPromise('UPDATE recently_visited SET last_access_time = NOW() WHERE user_id = ? AND project_id = ?', [
+					req.state!.userInfo.user_id,
+					project_id,
+				]);
 			} else {
 				// 如果不存在，插入记录
-				const sql2 = 'INSERT INTO recently_visited (user_id, project_id) VALUES (?, ?)';
-				await queryPromise(sql2, [user_id, project_id]);
+				await queryPromise('INSERT INTO recently_visited (user_id, project_id) VALUES (?, ?)', [req.state!.userInfo.user_id, project_id]);
 			}
 			res.status(200).json({
 				result_code: 0,
@@ -125,21 +136,26 @@ class ProjectsController {
 	};
 
 	// 获取某用户最近访问的项目列表
-	getRecentlyVisited = async (req: Request, res: Response) => {
-		const { user_id } = req.query;
+	getRecentlyVisited = async (req: AuthenticatedRequest, res: Response) => {
 		try {
-			const sql = 'SELECT * FROM recently_visited WHERE user_id = ? ORDER BY last_access_time DESC LIMIT 10';
-			const projectIdList = await queryPromise(sql, user_id);
+			const projectIdList = await queryPromise<RecentlyVisitedTable[]>(
+				'SELECT * FROM recently_visited WHERE user_id = ? ORDER BY last_access_time DESC LIMIT 10',
+				req.state!.userInfo.user_id
+			);
 
 			const result = await Promise.all(
-				projectIdList.map(async (item: any) => {
-					const sql1 = 'SELECT project_id,project_name,project_img,project_desc FROM projects WHERE project_id = ?';
-					const project = await queryPromise(sql1, item.project_id);
+				projectIdList.map(async (item) => {
+					const projects = await queryPromise<ProjectItem[]>(
+						'SELECT project_id,project_name,project_img,project_desc FROM projects WHERE project_id = ?',
+						item.project_id
+					);
 
-					const sql2 = 'SELECT last_access_time FROM recently_visited WHERE user_id = ? AND project_id = ?';
-					const last_access_time = await queryPromise(sql2, [user_id, item.project_id]);
+					const last_access_time = await queryPromise<{ last_access_time: string }[]>(
+						'SELECT last_access_time FROM recently_visited WHERE user_id = ? AND project_id = ?',
+						[req.state!.userInfo.user_id, item.project_id]
+					);
 					return {
-						...project[0],
+						...projects[0],
 						last_access_time: last_access_time[0].last_access_time,
 					};
 				})
@@ -148,7 +164,7 @@ class ProjectsController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get recent projects success',
-				data: result,
+				result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -160,18 +176,17 @@ class ProjectsController {
 
 	// 获取某项目所有的接口列表(目录+接口)
 	getApiList = async (req: Request, res: Response) => {
-		const { project_id } = req.query;
+		const { project_id } = req.query as unknown as ProjectId;
 		try {
 			let result: ApiListItem[] = [];
 			// 1. 获取所有的目录
-			const sql = 'SELECT * FROM dictionaries WHERE project_id = ?';
-			const dictionariesSource = await queryPromise(sql, [project_id]);
+			const dictionariesSource = await queryPromise<DistionarieTable[]>('SELECT * FROM dictionaries WHERE project_id = ?', project_id);
 
 			// 2. 获取到项目根目录
-			const root = dictionariesSource.find((item: any) => item.father_id === null);
+			const root = dictionariesSource.find((item) => item.father_id === null);
 			result.push({
-				id: root.dictionary_id,
-				label: root.dictionary_name,
+				id: root!.dictionary_id,
+				label: root!.dictionary_name,
 				type: 'dictionary',
 				children: [],
 			});
@@ -179,7 +194,7 @@ class ProjectsController {
 			// 3. 根据father_id构建目录树
 			const buildDicTree = (father_id: number) => {
 				const children: ApiListItem[] = [];
-				dictionariesSource.forEach((item: any) => {
+				dictionariesSource.forEach((item) => {
 					if (item.father_id === father_id) {
 						children.push({
 							id: item.dictionary_id,
@@ -192,16 +207,15 @@ class ProjectsController {
 				return children;
 			};
 
-			result[0].children = buildDicTree(root.dictionary_id);
+			result[0].children = buildDicTree(root!.dictionary_id);
 
 			// 4. 遍历目录树，根据dictionary_id获取每个目录下的接口
 			const getApis = async (tree: ApiListItem[]) => {
 				for (let i = 0; i < tree.length; i++) {
 					// 因为dictionary_id可能等于api_id，所以这里要判断一下是否为目录
 					if (tree[i].type === 'dictionary') {
-						const sql = 'SELECT * FROM apis WHERE dictionary_id = ?';
-						const apisSource = await queryPromise(sql, tree[i].id);
-						apisSource.forEach((item: any) => {
+						const apisSource = await queryPromise<ApisTable[]>('SELECT * FROM apis WHERE dictionary_id = ?', tree[i].id);
+						apisSource.forEach((item) => {
 							tree[i].children.push({
 								id: item.api_id,
 								type: item.api_method,
@@ -219,7 +233,7 @@ class ProjectsController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get project apis success',
-				data: result,
+				result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -231,18 +245,14 @@ class ProjectsController {
 
 	// 新增目录
 	addDictionary = async (req: Request, res: Response) => {
-		const { ...dictionaryInfo } = req.body;
+		const dictionaryInfo = req.body as AddDictionaryReq;
 		try {
-			const dictionary_id = (
-				await queryPromise('INSERT INTO dictionaries SET ?', {
-					...dictionaryInfo,
-				})
-			).insertId;
+			const { insertId } = await queryPromise<OkPacket>('INSERT INTO dictionaries SET ?', dictionaryInfo);
 
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'add dictionary success',
-				dictionary_id,
+				result: insertId,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -254,14 +264,13 @@ class ProjectsController {
 
 	// 更新目录
 	updateDictionary = async (req: Request, res: Response) => {
-		const { dictionary_id, ...dictionaryInfo } = req.body;
+		const { dictionary_id, ...dictionaryInfo } = req.body as UpdateDictionaryReq;
 		try {
 			await queryPromise('UPDATE dictionaries SET ? WHERE dictionary_id = ?', [dictionaryInfo, dictionary_id]);
 
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'update dictionary success',
-				dictionary_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -273,7 +282,7 @@ class ProjectsController {
 
 	// 删除目录
 	deleteDictionary = async (req: Request, res: Response) => {
-		const { dictionary_id } = req.body;
+		const { dictionary_id } = req.body as DictionaryId;
 		try {
 			await queryPromise('DELETE FROM dictionaries WHERE dictionary_id = ?', dictionary_id);
 
@@ -291,14 +300,14 @@ class ProjectsController {
 
 	// 获取某个项目的基本信息
 	getBasicInfo = async (req: Request, res: Response) => {
-		const { project_id } = req.query;
+		const { project_id } = req.query as unknown as ProjectId;
 		try {
-			const projectInfo = await queryPromise('SELECT * FROM projects WHERE project_id = ?', project_id);
+			const projectInfo = await queryPromise<ProjectsTable[]>('SELECT * FROM projects WHERE project_id = ?', project_id);
 
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get project info success',
-				project_info: projectInfo[0],
+				result: projectInfo[0],
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -310,14 +319,13 @@ class ProjectsController {
 
 	// 修改项目的基本信息
 	updateBasicInfo = async (req: Request, res: Response) => {
-		const { project_id, ...projectInfo } = req.body;
+		const { project_id, ...projectInfo } = req.body as UpdateProjectInfoReq;
 		try {
 			await queryPromise('UPDATE projects SET ? WHERE project_id = ?', [projectInfo, project_id]);
 
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'update project info success',
-				project_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -329,17 +337,17 @@ class ProjectsController {
 
 	// 获取某个项目的全局信息
 	getGlobalInfo = async (req: Request, res: Response) => {
-		const { project_id } = req.query;
+		const { project_id } = req.query as unknown as ProjectId;
 		try {
 			// 1. 获取全局参数
-			let global_params: any = [];
-			const paramsSource = await queryPromise('SELECT * FROM global_params WHERE project_id = ?', project_id);
+			let global_params = [];
+			const paramsSource = await queryPromise<GlobalParamsTable[]>('SELECT * FROM global_params WHERE project_id = ?', project_id);
 			for (let i = 0; i < 3; i++) {
-				const tempParams: any[] = paramsSource.filter((item: any) => item.father_type === i);
+				const tempParams = paramsSource.filter((item) => item.father_type === i);
 				if (tempParams.length > 0) {
-					let item = {
+					global_params.push({
 						type: i,
-						params_list: tempParams.map((param: any) => {
+						params_list: tempParams.map((param) => {
 							return {
 								param_id: param.param_id,
 								param_name: param.param_name,
@@ -348,14 +356,13 @@ class ProjectsController {
 								param_value: param.param_value,
 							};
 						}),
-					};
-					global_params.push(item);
+					});
 				}
 			}
 
 			// 2. 获取全局变量
-			const variablesSource = await queryPromise('SELECT * FROM global_variables WHERE project_id = ?', project_id);
-			const global_variables = variablesSource.map((variable: any) => {
+			const variablesSource = await queryPromise<GlobalVariablesTable[]>('SELECT * FROM global_variables WHERE project_id = ?', project_id);
+			const global_variables = variablesSource.map((variable) => {
 				return {
 					variable_id: variable.variable_id,
 					variable_name: variable.variable_name,
@@ -366,15 +373,17 @@ class ProjectsController {
 			});
 
 			// 3. 获取环境列表
-			const env_list = await queryPromise('SELECT env_type, env_baseurl FROM project_env WHERE project_id = ?', project_id);
+			const env_list = await queryPromise<EnvListItem[]>('SELECT env_type, env_baseurl FROM project_env WHERE project_id = ?', project_id);
 
 			// 4. 结果组装返回
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get project global info success',
-				global_params,
-				global_variables,
-				env_list,
+				result: {
+					global_params,
+					global_variables,
+					env_list,
+				},
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -386,7 +395,7 @@ class ProjectsController {
 
 	// 更新某个项目的全局信息
 	updateGlobalInfo = async (req: Request, res: Response) => {
-		const { project_id, global_params, global_variables, env_list } = req.body;
+		const { project_id, global_params, global_variables, env_list } = req.body as UpdateProjectGlobalInfoReq;
 		try {
 			// 1. 更新全局参数，根据param_action_type来判断是新增、修改还是删除
 			if (global_params) {
@@ -465,14 +474,13 @@ class ProjectsController {
 
 	// 删除项目
 	deleteProject = async (req: Request, res: Response) => {
-		const { project_id } = req.body;
+		const { project_id } = req.body as ProjectId;
 		try {
 			await queryPromise('DELETE FROM projects WHERE project_id = ?', project_id);
 
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'delete project success',
-				project_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -488,11 +496,14 @@ class ProjectsController {
 			res.status(400).json({ result_code: 1, result_msg: 'No file uploaded' });
 			return;
 		}
-		const { project_id } = req.body;
+		const { project_id } = req.body as ProjectId;
 		try {
 			// 通过project_id，获取到这个项目的根目录
 			const { dictionary_id } = (
-				await queryPromise('SELECT dictionary_id FROM dictionaries WHERE project_id = ? AND father_id IS NULL', project_id)
+				await queryPromise<{ dictionary_id: string }[]>(
+					'SELECT dictionary_id FROM dictionaries WHERE project_id = ? AND father_id IS NULL',
+					project_id
+				)
 			)[0];
 			const yamlPath = `public/uploads/files/yamls/${req.file.filename}`;
 
@@ -525,12 +536,13 @@ class ProjectsController {
 				}
 				return obj;
 			};
+
 			// 3. 遍历paths，提取出api_info，api_request_params，api_request_JSON，api_responses
 			let api_id_list: number[] = [];
-			let api_info_list: any[] = [];
-			let api_request_params_list: any[] = [];
-			let api_request_JSON_list: any[] = [];
-			let api_responses_list: any[] = [];
+			let api_info_list = [];
+			let api_request_params_list = [];
+			let api_request_JSON_list = [];
+			let api_responses_list = [];
 			const paths = jsonData.paths;
 			for (let path in paths) {
 				let api_info = {
@@ -633,21 +645,17 @@ class ProjectsController {
 					});
 				}
 				// 2.5 处理完成后，将数据保存到数据库中
-				const api_id = (
-					await queryPromise('INSERT INTO apis SET ?', {
-						...api_info,
-					})
-				).insertId;
+				const { insertId: api_id } = await queryPromise<OkPacket>('INSERT INTO apis SET ?', api_info);
 
 				if (api_responses) {
-					api_responses.forEach(async (item: any) => {
+					api_responses.forEach(async (item) => {
 						await queryPromise('INSERT INTO api_responses SET ?', { ...item, api_id });
 					});
 				}
 
 				if (api_request_params) {
-					api_request_params.forEach((item: any) => {
-						item.params_list.forEach(async (param: any) => {
+					api_request_params.forEach((item) => {
+						item.params_list!.forEach(async (param) => {
 							const paramItem = {
 								api_id,
 								param_class: item.type,
@@ -674,11 +682,13 @@ class ProjectsController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'Change yaml to json successfully',
-				api_id_list,
-				api_info_list,
-				api_request_params_list,
-				api_request_JSON_list,
-				api_responses_list,
+				result: {
+					api_id_list,
+					api_info_list,
+					api_request_params_list,
+					api_request_JSON_list,
+					api_responses_list,
+				},
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -690,25 +700,27 @@ class ProjectsController {
 
 	// mock接口，接收JSON Schema，返回mock数据
 	mock = async (req: Request, res: Response) => {
-		const schema = req.body;
+		const schema = req.body as string;
 
-		const mockedData = await JSONSchemaFaker.resolve(schema);
+		const result = await JSONSchemaFaker.resolve(schema);
 
-		res.status(200).json(mockedData);
+		res.status(200).json({
+			result_code: 0,
+			result_msg: 'mock data successfully',
+			result,
+		});
 	};
 
 	// 获取到某个项目的历史操作记录信息
 	getHistoryInfo = async (req: Request, res: Response) => {
-		const { project_id } = req.query;
+		const { project_id } = req.query as unknown as ProjectId;
 		try {
-			const sql = 'SELECT * FROM api_versions WHERE project_id = ? ORDER BY createdAt DESC';
-			const historyInfo = await queryPromise(sql, project_id);
+			const historyInfo = await queryPromise<VersionsTable[]>('SELECT * FROM api_versions WHERE project_id = ? ORDER BY createdAt DESC', project_id);
 
 			// 根据user_id获取用户的基本信息
-			const sql2 = 'SELECT user_id, username, avatar FROM users WHERE user_id = ?';
 			const result = await Promise.all(
-				historyInfo.map(async (item: any) => {
-					const userInfo = await queryPromise(sql2, item.user_id);
+				historyInfo.map(async (item) => {
+					const userInfo = await queryPromise<UserInfo[]>('SELECT user_id, username, avatar FROM users WHERE user_id = ?', item.user_id);
 					return {
 						...item,
 						user_name: userInfo[0].username,
@@ -720,7 +732,7 @@ class ProjectsController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'get project history info success',
-				history_info: result,
+				result,
 			});
 		} catch (error: any) {
 			res.status(500).json({
@@ -732,19 +744,19 @@ class ProjectsController {
 
 	// 回滚某个项目的历史记录
 	rollback = async (req: Request, res: Response) => {
-		const { version_id, project_id } = req.body;
+		const { version_id, project_id } = req.body as RollbackReq;
 		try {
 			// 从api_versions表中根据version_id拿到version_type
 			// version_type为版本更新的类型，0-接口基本信息更新；1-接口返回体更新；2-接口请求参数更新；3-接口请求体(Body-JSON)更新。如果涉及到多个内容的更新，采用'0,1,...'这样的形式进行拼接。
 			// 目前version_type为4或者5不支持回滚功能。
-			const version_type = (await queryPromise('SELECT version_type FROM api_versions WHERE version_id = ?', version_id))[0].version_type.split(
-				','
-			) as string[];
+			const version_type = (
+				await queryPromise<{ version_type: string }[]>('SELECT version_type FROM api_versions WHERE version_id = ?', version_id)
+			)[0].version_type.split(',') as string[];
 
 			if (version_type.includes('4') || version_type.includes('5')) {
 				res.status(200).json({
 					result_code: 1,
-					result_msg: '这个版本不支持回滚',
+					result_msg: 'This version cannot be rolled back',
 				});
 				return;
 			}
@@ -752,18 +764,17 @@ class ProjectsController {
 			// 1. 回滚api_info
 			if (version_type.includes('0')) {
 				// 1.1 从api_backup中拿到对应的version_id的api_info
-				const targetApiInfo = await queryPromise('SELECT * FROM api_backup WHERE version_id = ?', version_id);
+				const targetApiInfo = await queryPromise<ApiBackupTable[]>('SELECT * FROM api_backup WHERE version_id = ?', version_id);
 				if (targetApiInfo.length > 0) {
 					// 1.2 从api_version中拿到version_type包含0的除了目前这个最近的一个版本的version_id
 					let lastVersionId: number | null = null;
-					const versionIdList = await queryPromise(
+					const versionIdList = await queryPromise<{ version_id: number }[]>(
 						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%0%" ORDER BY createdAt DESC',
-						[project_id]
+						project_id
 					);
 					if (versionIdList.length > 1) {
 						lastVersionId = versionIdList[1].version_id;
 					}
-
 					// 1.3 剔除掉backup_id、api_id、project_id、version_id、api_createdAt、api_editedAt、delete_status属性，拿到对应的api_id，然后更新apis表中对应的api
 					const apiInfo = JSON.parse(JSON.stringify(targetApiInfo[0]));
 					delete apiInfo.backup_id;
@@ -781,15 +792,18 @@ class ProjectsController {
 
 			// 2. 回滚api_responses
 			if (version_type.includes('1')) {
-				const targetResponses = await queryPromise('SELECT * FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
+				const targetResponses = await queryPromise<ApiResponsesTable[]>(
+					'SELECT * FROM api_responses WHERE version_id = ? AND delete_status = 0',
+					version_id
+				);
 				if (targetResponses.length > 0) {
 					// 2.1 把api_responses表中对应的version_id的delete_status为0的记录删除
 					await queryPromise('DELETE FROM api_responses WHERE version_id = ? AND delete_status = 0', version_id);
 					// 2.2 从api_version中拿到version_type包含1的除了目前这个最近的一个版本的version_id
 					let lastVersionId: number | null = null;
-					const versionIdList = await queryPromise(
+					const versionIdList = await queryPromise<{ version_id: number }[]>(
 						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%1%" ORDER BY createdAt DESC',
-						[project_id]
+						project_id
 					);
 					if (versionIdList.length > 1) {
 						lastVersionId = versionIdList[1].version_id;
@@ -804,15 +818,18 @@ class ProjectsController {
 
 			// 3. 回滚api_request_params
 			if (version_type.includes('2')) {
-				const targetRequestParams = await queryPromise('SELECT * FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
+				const targetRequestParams = await queryPromise<ApiRequestParamsTable[]>(
+					'SELECT * FROM request_params WHERE version_id = ? AND delete_status = 0',
+					version_id
+				);
 				if (targetRequestParams.length > 0) {
 					// 3.1 把request_params表中对应的version_id的delete_status为0的记录删除
 					await queryPromise('DELETE FROM request_params WHERE version_id = ? AND delete_status = 0', version_id);
 					// 3.2 从api_version中拿到version_type包含2的除了目前这个最近的一个版本的version_id
 					let lastVersionId: number | null = null;
-					const versionIdList = await queryPromise(
+					const versionIdList = await queryPromise<{ version_id: number }[]>(
 						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%2%" ORDER BY createdAt DESC',
-						[project_id]
+						project_id
 					);
 					if (versionIdList.length > 1) {
 						lastVersionId = versionIdList[1].version_id;
@@ -827,15 +844,18 @@ class ProjectsController {
 
 			// 4. 回滚api_request_JSON
 			if (version_type.includes('3')) {
-				const targetRequestJSON = await queryPromise('SELECT * FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
+				const targetRequestJSON = await queryPromise<ApiRequestJSONTable[]>(
+					'SELECT * FROM request_JSON WHERE version_id = ? AND delete_status = 0',
+					version_id
+				);
 				if (targetRequestJSON.length > 0) {
 					// 4.1 把request_JSON表中对应的version_id的delete_status为0的记录删除
 					await queryPromise('DELETE FROM request_JSON WHERE version_id = ? AND delete_status = 0', version_id);
 					// 4.2 从api_version中拿到version_type包含3的除了目前这个最近的一个版本的version_id
 					let lastVersionId: number | null = null;
-					const versionIdList = await queryPromise(
+					const versionIdList = await queryPromise<{ version_id: number }[]>(
 						'SELECT version_id FROM api_versions WHERE project_id = ? AND version_type LIKE "%3%" ORDER BY createdAt DESC',
-						[project_id]
+						project_id
 					);
 					if (versionIdList.length > 1) {
 						lastVersionId = versionIdList[1].version_id;
@@ -854,12 +874,12 @@ class ProjectsController {
 			// 6. 回滚成功，返回响应
 			res.status(200).json({
 				result_code: 0,
-				result_msg: '回滚成功',
+				result_msg: 'rollback success',
 			});
-		} catch (error) {
+		} catch (error: any) {
 			res.status(500).json({
 				result_code: 1,
-				result_msg: '回滚失败',
+				result_msg: error.message || 'An error occurred',
 				error,
 			});
 		}

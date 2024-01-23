@@ -1,6 +1,7 @@
 import path from 'path';
 import multer from 'multer';
 
+// 上传用户头像
 export const avatarUpload = multer({
 	storage: multer.diskStorage({
 		destination(_, __, cb) {

@@ -14,7 +14,7 @@ export interface TeamId {
 /**
  * 新建团队请求体
  */
-export interface CreateTeamReqBody {
+export interface CreateTeamReq {
 	/**
 	 * 团队名称
 	 */
@@ -31,7 +31,7 @@ export interface CreateTeamReqBody {
 /**
  * 更新团队信息请求体
  */
-export interface UpdateTeamInfoReqBody {
+export interface UpdateTeamInfoReq {
 	/**
 	 * 团队描述
 	 */
@@ -56,7 +56,7 @@ export interface UpdateTeamInfoReqBody {
 /**
  * 邀请用户加入团队请求体
  */
-export interface InviteUserReqBody {
+export interface InviteUserReq {
 	/**
 	 * 团队id
 	 */
@@ -73,7 +73,7 @@ export interface InviteUserReqBody {
 /**
  * 设置成员权限请求体
  */
-export interface SetMemberIdentityReqBody {
+export interface SetMemberIdentityReq {
 	/**
 	 * 团队id
 	 */
@@ -107,7 +107,7 @@ export interface SetMemberIdentityReqBody {
 /**
  * 移除某成员请求体
  */
-export interface RemoveMemberReqBody {
+export interface RemoveMemberReq {
 	/**
 	 * 团队id
 	 */
@@ -117,7 +117,6 @@ export interface RemoveMemberReqBody {
 	 */
 	user_id: number;
 }
-
 /* ----------返回数据体定义---------- */
 /**
  * 团队列表item信息
@@ -211,5 +210,3 @@ export interface TeamProjectMemberItem {
 	 */
 	project_user_identity: number;
 }
-
-/* ----------数据库表定义---------- */
