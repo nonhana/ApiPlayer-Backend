@@ -167,7 +167,7 @@ class UserController {
 			await queryPromise('UPDATE users SET ? WHERE user_id = ?', [info, req.state!.userInfo.user_id]);
 			const retrieveRes = await queryPromise<UsersTable[]>('SELECT * FROM users WHERE user_id = ?', req.state!.userInfo.user_id);
 
-			const { user_id, password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
+			const { password, createdAt, updatedAt, ...userInfo } = retrieveRes[0];
 			res.status(200).json({ result_code: 0, result_msg: '更新成功', result: userInfo });
 		} catch (error) {
 			res.status(500).json({ result_code: 1, result_msg: '用户信息更新失败', error });

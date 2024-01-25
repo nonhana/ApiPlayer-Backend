@@ -14,7 +14,7 @@ import type {
 	RemoveMemberReq,
 } from './types';
 import type { OkPacket } from 'mysql';
-import { ProjectPermission } from '../../utils/constants';
+import { ProjectPermission, TeamPermission } from '../../utils/constants';
 
 class TeamController {
 	// 获取该用户的团队列表
@@ -124,7 +124,7 @@ class TeamController {
 				req.state!.userInfo.user_id,
 				insertId,
 				team_user_name,
-				ProjectPermission.ADMIN,
+				TeamPermission.OWNER,
 			]);
 			res.status(200).json({
 				result_code: 0,
@@ -187,7 +187,7 @@ class TeamController {
 				user_id,
 				team_id,
 				team_user_name,
-				ProjectPermission.FORBIDDEN,
+				TeamPermission.VISITOR,
 			]);
 			// 2. 再加到团队的所有项目里面
 			const projectList = await queryPromise<{ project_id: string }[]>('SELECT project_id FROM projects WHERE team_id = ?', team_id);

@@ -1,6 +1,14 @@
 // utils/constants.ts
 // 用于存放项目中遇到的所有常量，包括枚举、类型别名等
 
+// 团队权限枚举：0-团队所有者，1-团队管理者，2-团队成员，3-游客
+export enum TeamPermission {
+	OWNER = 0,
+	MANAGER = 1,
+	MEMBER = 2,
+	VISITOR = 3,
+}
+
 // 项目权限枚举：0-管理员，1-编辑者，2-只读成员，3-禁止访问
 export enum ProjectPermission {
 	ADMIN = 0,
