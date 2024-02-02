@@ -462,7 +462,7 @@ class ProjectsController {
 			res.status(200).json({
 				result_code: 0,
 				result_msg: 'update project global info success',
-				project_id,
+				result: project_id,
 			});
 		} catch (error: any) {
 			res.status(500).json({

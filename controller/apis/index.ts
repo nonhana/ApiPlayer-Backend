@@ -77,13 +77,29 @@ class ApisController {
 	// 更新接口
 	updateApi = async (req: AuthenticatedRequest, res: Response) => {
 		// 说明：api_id, project_id两者是必须的，其他的参数如果没有传就不更新
-		const { api_id, project_id, api_request_params, api_request_JSON, api_responses, basic_info } = req.body as UpdateApiReq;
+		const { api_id, dictionary_id, project_id, api_request_params, api_request_JSON, api_responses, basic_info } = req.body as UpdateApiReq;
 		try {
 			// 在修改开始前，检测有没有要修改的内容，如果没有，直接返回
-			if (!basic_info && !api_request_params && !api_request_JSON && !api_responses) {
+			if (!dictionary_id && !basic_info && !api_request_params && !api_request_JSON && !api_responses) {
 				res.status(200).json({
 					result_code: 1,
 					result_msg: '未检测到要修改的内容',
+				});
+				return;
+			}
+			console.log(api_id, dictionary_id, project_id);
+
+			// 如果dictionary_id改变，不插入修改记录，直接返回
+			const { dictionary_id: dictionaryIdSource } = (
+				await queryPromise<{ dictionary_id: number }[]>('SELECT dictionary_id FROM apis WHERE api_id = ?', api_id)
+			)[0];
+			console.log(dictionary_id, dictionaryIdSource);
+			if (dictionary_id && dictionary_id !== dictionaryIdSource) {
+				await queryPromise('UPDATE apis SET dictionary_id = ? WHERE api_id = ?', [dictionary_id, api_id]);
+				res.status(200).json({
+					result_code: 0,
+					result_msg: '更新接口成功',
+					result: api_id,
 				});
 				return;
 			}

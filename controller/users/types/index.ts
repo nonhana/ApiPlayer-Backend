@@ -57,6 +57,10 @@ export interface ModifyUserInfoReq {
 	 * 用户头像
 	 */
 	avatar?: string;
+	/**
+	 * 用户邮箱
+	 */
+	email?: string;
 }
 /**
  * 搜索用户请求体

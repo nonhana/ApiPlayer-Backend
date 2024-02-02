@@ -217,7 +217,7 @@ class TeamController {
 	setMemberIdentity = async (req: Request, res: Response) => {
 		const { team_id, user_id, team_project_indentity_list, ...teamInfo } = req.body as SetMemberIdentityReq;
 		try {
-			await queryPromise('UPDATE team_members SET ? WHERE team_id = ? AND user_id = ?', [teamInfo, , team_id, user_id]);
+			await queryPromise('UPDATE team_members SET ? WHERE team_id = ? AND user_id = ?', [teamInfo, team_id, user_id]);
 
 			if (team_project_indentity_list && team_project_indentity_list.length > 0) {
 				team_project_indentity_list.forEach(async (item) => {

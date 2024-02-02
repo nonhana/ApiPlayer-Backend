@@ -50,6 +50,10 @@ export interface UpdateApiReq {
 	 */
 	project_id: number;
 	/**
+	 * 目录id
+	 */
+	dictionary_id: number;
+	/**
 	 * 接口的基本信息
 	 */
 	basic_info: {
