@@ -21,7 +21,7 @@ export const avatarUpload = multer({
 		}
 	},
 	limits: {
-		fileSize: 1024 * 1024 * 5,
+		fileSize: 1024 * 1024 * 10,
 	},
 });
 
@@ -45,7 +45,7 @@ export const imgUpload = multer({
 		}
 	},
 	limits: {
-		fileSize: 1024 * 1024 * 5,
+		fileSize: 1024 * 1024 * 10,
 	},
 });
 
@@ -69,6 +69,6 @@ export const yamlUpload = multer({
 		}
 	},
 	limits: {
-		fileSize: 1024 * 1024 * 3,
+		fileSize: 1024 * 1024 * 10,
 	},
 });
