@@ -26,8 +26,8 @@ app.set('port', port);
 function createServer() {
 	if (process.env.NODE_ENV === 'production') {
 		const options = {
-			key: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana.site.key')),
-			cert: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana.site_bundle.pem')),
+			key: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana-server.cn.key')),
+			cert: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana-server.cn_bundle.pem')),
 		};
 		return https.createServer(options, app);
 	} else {
