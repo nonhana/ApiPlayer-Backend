@@ -5,9 +5,6 @@
  */
 import dotenv from 'dotenv';
 import http from 'http';
-import https from 'https';
-import fs from 'fs';
-import path from 'path';
 import app from '../app';
 import debug from 'debug';
 
@@ -21,20 +18,9 @@ const port = normalizePort(process.env.PORT || '3000');
 app.set('port', port);
 
 /**
- * Define HTTPS/HTTP server creator.
+ * Create HTTP server.
  */
-function createServer() {
-	if (process.env.NODE_ENV === 'production') {
-		const options = {
-			key: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana-server.cn.key')),
-			cert: fs.readFileSync(path.join(__dirname, '../public/ssl/nonhana-server.cn_bundle.pem')),
-		};
-		return https.createServer(options, app);
-	} else {
-		return http.createServer(app);
-	}
-}
-const server = createServer();
+const server = http.createServer(app);
 
 /**
  * Listen on provided port, on all network interfaces.
@@ -63,7 +49,7 @@ function normalizePort(val: any) {
 }
 
 /**
- * Event listener for HTTPS/HTTP server "error" event.
+ * Event listener for HTTP server "error" event.
  */
 function onError(error: any) {
 	if (error.syscall !== 'listen') {
@@ -86,7 +72,7 @@ function onError(error: any) {
 }
 
 /**
- * Event listener for HTTPS/HTTP server "listening" event.
+ * Event listener for HTTP server "listening" event.
  */
 function onListening() {
 	const addr = server.address();

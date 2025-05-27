@@ -1,5 +1,5 @@
 import db from '../database/index';
-import { QueryOptions } from 'mysql';
+import { QueryError, FieldPacket, RowDataPacket, ResultSetHeader } from 'mysql2';
 
 // 判断客户端传递的参数是否包含必须的参数
 export const getMissingParam = (requireParams: string[], paramsFromClient: object) => {
@@ -11,18 +11,18 @@ export const getMissingParam = (requireParams: string[], paramsFromClient: objec
 };
 
 // 使用Promise封装数据库查询，方便使用async/await来取出查询结果
-export const queryPromise = <T>(options: string | QueryOptions, values?: any): Promise<T> => {
+export const queryPromise = <T = RowDataPacket[] | ResultSetHeader>(sql: string, values?: any): Promise<T> => {
 	return new Promise((resolve, reject) => {
-		if (values) {
-			db.query(options, values, (error, result) => {
+		if (values !== undefined) {
+			db.query(sql, values, (error: QueryError | null, result, fields: FieldPacket[]) => {
 				if (error) {
 					reject(error);
 				} else {
-					resolve(result);
+					resolve(result as T);
 				}
 			});
 		} else {
-			db.query(options, (error, result) => {
+			db.query(sql, (error: QueryError | null, result: T, fields: FieldPacket[]) => {
 				if (error) {
 					reject(error);
 				} else {

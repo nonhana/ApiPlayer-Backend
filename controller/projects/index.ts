@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { queryPromise } from '../../utils';
-import type { OkPacket } from 'mysql';
+import type { ResultSetHeader } from 'mysql2';
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';
 import { JSONSchemaFaker } from 'json-schema-faker';
@@ -65,7 +65,7 @@ class ProjectsController {
 		const { team_id, ...projectInfo } = req.body as CreateProjectReq;
 		try {
 			// 1. 先插入项目信息，获取到新的项目信息
-			const { insertId } = await queryPromise<OkPacket>('INSERT INTO projects SET ?', { ...projectInfo, team_id });
+			const { insertId } = await queryPromise<ResultSetHeader>('INSERT INTO projects SET ?', { ...projectInfo, team_id });
 
 			// 2. 再插入项目成员信息，将这个队伍里面的所有成员都加入到这个项目的成员列表里面
 			const userList = await queryPromise<{ user_id: string }[]>('SELECT user_id FROM team_members WHERE team_id = ?', team_id);
@@ -247,7 +247,7 @@ class ProjectsController {
 	addDictionary = async (req: Request, res: Response) => {
 		const dictionaryInfo = req.body as AddDictionaryReq;
 		try {
-			const { insertId } = await queryPromise<OkPacket>('INSERT INTO dictionaries SET ?', dictionaryInfo);
+			const { insertId } = await queryPromise<ResultSetHeader>('INSERT INTO dictionaries SET ?', dictionaryInfo);
 
 			res.status(200).json({
 				result_code: 0,
@@ -645,7 +645,7 @@ class ProjectsController {
 					});
 				}
 				// 2.5 处理完成后，将数据保存到数据库中
-				const { insertId: api_id } = await queryPromise<OkPacket>('INSERT INTO apis SET ?', api_info);
+				const { insertId: api_id } = await queryPromise<ResultSetHeader>('INSERT INTO apis SET ?', api_info);
 
 				if (api_responses) {
 					api_responses.forEach(async (item) => {

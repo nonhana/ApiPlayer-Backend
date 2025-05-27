@@ -3,7 +3,7 @@ import { AuthenticatedRequest } from '../../middleware/user.middleware';
 import { queryPromise } from '../../utils';
 import axios from 'axios';
 import qs from 'qs';
-import type { OkPacket } from 'mysql';
+import type { ResultSetHeader } from 'mysql2';
 import type { AxiosRequestConfig } from 'axios';
 import type { AddApiReq, DeleteApiReq, RunApiReq, UpdateApiReq } from './types';
 import type { ApiId, ApiRequestParam, ApiRequestParamsTable, ApiResponsesTable, ApisTable, GlobalParamsTable, ProjectsTable } from '../types';
@@ -19,7 +19,7 @@ class ApisController {
 		try {
 			// 在api_version表当中插入修改的记录
 			const { project_id } = apiInfo;
-			const { insertId: version_id } = await queryPromise<OkPacket>('INSERT INTO api_versions SET ?', {
+			const { insertId: version_id } = await queryPromise<ResultSetHeader>('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
 				project_id,
 				version_msg: `新增了接口。`,
@@ -27,7 +27,7 @@ class ApisController {
 			});
 
 			// 1. 插入api_info，拿到api_id
-			const { insertId: result } = await queryPromise<OkPacket>('INSERT INTO apis SET ?', {
+			const { insertId: result } = await queryPromise<ResultSetHeader>('INSERT INTO apis SET ?', {
 				...apiInfo,
 				version_id,
 			});
@@ -52,7 +52,7 @@ class ApisController {
 		try {
 			// 在api_version表当中插入修改的记录
 			const { api_name } = (await queryPromise<{ api_name: string }[]>('SELECT api_name FROM apis WHERE api_id = ?', api_id))[0];
-			const { insertId } = await queryPromise<OkPacket>('INSERT INTO api_versions SET ?', {
+			const { insertId } = await queryPromise<ResultSetHeader>('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo.user_id,
 				project_id,
 				version_msg: `删除了接口：${api_name} ，接口id为：${api_id} 。`,
@@ -105,7 +105,7 @@ class ApisController {
 			}
 
 			// 在api_version表当中插入修改的记录并获取到version_id
-			const { insertId: version_id } = await queryPromise<OkPacket>('INSERT INTO api_versions SET ?', {
+			const { insertId: version_id } = await queryPromise<ResultSetHeader>('INSERT INTO api_versions SET ?', {
 				user_id: req.state!.userInfo!.user_id,
 				project_id,
 				version_msg: '',

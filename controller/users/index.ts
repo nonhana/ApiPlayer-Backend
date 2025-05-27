@@ -7,7 +7,7 @@ import type { AuthenticatedRequest } from '../../middleware/user.middleware';
 import type { SendCaptchaReq, RegisterReq, LoginReq, ModifyUserInfoReq, SearchUserReq, ModifyPasswordReq, ModifyEmailReq } from './types';
 import type { UsersTable } from '../types';
 import type { UserId } from '../types';
-import type { OkPacket } from 'mysql';
+import type { ResultSetHeader } from 'mysql2';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -90,9 +90,12 @@ class UserController {
 
 		try {
 			// 注册的时候拿到 new_user_id和username
-			const { insertId: new_user_id } = await queryPromise<OkPacket>('INSERT INTO users (email, password) VALUES (?, ?)', [email, passwordEncrypted]);
+			const { insertId: new_user_id } = await queryPromise<ResultSetHeader>('INSERT INTO users (email, password) VALUES (?, ?)', [
+				email,
+				passwordEncrypted,
+			]);
 			const { username } = await queryPromise<{ username: string }>('SELECT username FROM users WHERE user_id = ?', new_user_id);
-			const { insertId: new_team_id } = await queryPromise<OkPacket>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [
+			const { insertId: new_team_id } = await queryPromise<ResultSetHeader>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [
 				'PersonalTeam',
 				'个人团队',
 			]);

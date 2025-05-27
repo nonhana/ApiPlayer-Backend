@@ -13,7 +13,7 @@ import type {
 	SetMemberIdentityReq,
 	RemoveMemberReq,
 } from './types';
-import type { OkPacket } from 'mysql';
+import type { ResultSetHeader } from 'mysql2';
 import { ProjectPermission, TeamPermission } from '../../utils/constants';
 
 class TeamController {
@@ -117,7 +117,7 @@ class TeamController {
 	addTeam = async (req: AuthenticatedRequest, res: Response) => {
 		const { team_name, team_desc, team_user_name } = req.body as CreateTeamReq;
 		try {
-			const { insertId } = await queryPromise<OkPacket>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [team_name, team_desc]);
+			const { insertId } = await queryPromise<ResultSetHeader>('INSERT INTO teams (team_name, team_desc) VALUES (?, ?)', [team_name, team_desc]);
 
 			// 创建团队的时候，创建人是团队所有者
 			await queryPromise('INSERT INTO team_members (user_id, team_id, team_user_name, team_user_identity) VALUES (?, ?, ?, ?)', [
